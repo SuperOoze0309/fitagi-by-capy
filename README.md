@@ -4,8 +4,8 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.9.0-informational.svg)](CHANGELOG.md)
-[![Platform](https://img.shields.io/badge/platform-Android-3ddc84.svg)](#build-an-android-apk)
-[![Tests](https://img.shields.io/badge/tests-271%20passing-brightgreen.svg)](#verify)
+[![Platform](https://img.shields.io/badge/platform-Android%206.0%2B-3ddc84.svg)](#supported-devices)
+[![Tests](https://img.shields.io/badge/tests-271%20passing-brightgreen.svg)](docs/DEVELOPING.md#verify)
 
 A free, open-source, local-first workout and meal tracker for Android. The mascot is a ragdoll cat,
 drawn in code rather than shipped as an image.
@@ -30,55 +30,36 @@ optional OpenAI-compatible AI layer.
 
 ---
 
-## Quick start (browser)
+## Get the APK
 
-```bash
-npm install
-npm run dev          # http://localhost:5173
-```
+Download `FitAGI-by-Capy-0.9.0-debug.apk` from the
+[latest release](https://github.com/SuperOoze0309/fitagi-by-capy/releases/latest), copy it to the phone
+and open it — you will need to allow installing from unknown sources, because the APK is signed with
+the Android debug key rather than a Play key. `adb install -r FitAGI-by-Capy-0.9.0-debug.apk` works too.
 
-Browser development uses IndexedDB through the same repository interface that Android uses for
-SQLite, so the app behaves identically in both.
+What the APK does, in one breath: it logs your workouts set by set, keeps a meal log with optional photo
+analysis, shows progress charts, schedules reminders as local notifications, holds your weekly training
+plan, and can optionally talk to an OpenAI-compatible endpoint you configure. **Nothing leaves the
+phone** unless you start an AI request yourself. There is no account, no server, no ads and no
+telemetry, and every core feature works with the phone in flight mode.
 
-The interface starts in the device's language when it is one of the three shipped ones, and
-Settings switches language and theme immediately — no reload, no restart. The default theme is
-`bunny` (pink and blue); `panda` and `orca` ship alongside it.
+## Supported devices
 
-## Build an Android APK
+| | |
+| --- | --- |
+| Android | **6.0 (API 23) or newer.** Compiled and validated against API 35 |
+| Architecture | Any — phone or tablet, ARM or x86, 32- or 64-bit |
+| Screen | Anything from a 320dp-wide phone to a tablet or a near-desktop window. Layouts reflow; nothing needs a particular size |
+| Camera | **Optional.** A device without one still installs and still logs meals manually — the camera is only used for photo analysis |
+| Notifications | Reminders need Android 13+'s notification permission granted; without it the app just never rings. They survive a restart |
+| Storage | A few MB. Your data is a single SQLite file, plus whatever meal photos you take |
+| Network | **Only for the optional AI features.** Everything else is fully offline |
+| Language | Simplified Chinese, English, Spanish — otherwise it follows the device and falls back to English |
 
-```bash
-npm run android:apk    # build the web assets, sync Capacitor, assemble a debug APK
-```
+## Development
 
-The three steps separately, if you prefer to run them yourself:
-
-```bash
-npm run build                              # type-check + build the web assets
-npm run cap:sync                           # copy assets and plugins into the Android project
-cd android && gradlew.bat assembleDebug    # assemble the debug APK
-```
-
-The APK lands in `android/app/build/outputs/apk/debug/app-debug.apk`.
-
-Install it on a device or emulator with:
-
-```bash
-adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-Requirements: JDK 17+ (21 verified) and the Android SDK with **platform 35** and build-tools.
-Gradle is provided by the wrapper; it downloads its distribution on first run.
-
-## Verify
-
-```bash
-npm run verify         # lint + typecheck + test + production build
-npm run test           # 270 unit tests in 47 suites (node --test)
-npm run test:browser   # headless Chrome drives the real app at a phone and a desktop viewport
-```
-
-The npm scripts are `dev`, `build`, `preview`, `test`, `test:browser`, `typecheck`, `lint`,
-`verify`, `cap:sync`, `cap:copy` and `android:apk`.
+Building from source, running the app in a browser, the npm scripts and the test suites are covered in
+[`docs/DEVELOPING.md`](docs/DEVELOPING.md) · [`中文`](docs/DEVELOPING.md#中文).
 
 ## What works today
 
@@ -360,13 +341,10 @@ letterform concepts.
 
 ### Layout
 
-One layout serves a small phone, a tall phone, a folded and an unfolded foldable, a tablet, a
-landscape phone and a near-desktop window. Navigation is a bottom bar on a phone and a side rail from
-56rem up; the type scale is fluid (`clamp()`), grids use `auto-fit`, content is capped to a reading
-width and centred once there is room, and sheets become centred dialogs instead of full-width
-panels. There are no fixed pixel widths for content. The browser smoke test runs the whole suite at a
-phone viewport and a desktop one and asserts at each width that exactly one navigation is shown and
-that nothing overflows.
+One layout serves whatever screen the app is on. Navigation is a bottom bar on a phone and a side rail
+from 56rem up; the type scale is fluid (`clamp()`), grids use `auto-fit`, content is capped to a reading
+width and centred once there is room, and sheets become centred dialogs instead of full-width panels.
+There are no fixed pixel widths for content, and nothing needs a particular screen size or orientation.
 
 ### Corners
 
@@ -501,6 +479,7 @@ never contain meal photos.
 | --- | --- |
 | [`README.zh-CN.md`](README.zh-CN.md) | This file, in Simplified Chinese. 本文件的中文版。 |
 | [`CHANGELOG.md`](CHANGELOG.md) | What changed in each release, in English and Chinese. |
+| [`docs/DEVELOPING.md`](docs/DEVELOPING.md) | For contributors: running it in a browser, npm scripts, building the APK, the test suites. English and Chinese in one file. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`中文`](docs/ARCHITECTURE.zh-CN.md) | Why the code is shaped the way it is: the storage contract, the migration rules, the theme and i18n architecture, the vision rules, the test harness. |
 | [`design/README.md`](design/README.md) | The artwork sources and the scripts that generate the icons and splash screens. |
 
@@ -516,7 +495,8 @@ The two rules that matter most:
    not rename them.
 
 Run `npm run verify` before opening a pull request: lint, typecheck, 271 unit tests and a production
-build. `npm run test:browser` additionally drives the real app in headless Chrome at two viewports.
+build. [`docs/DEVELOPING.md`](docs/DEVELOPING.md) has the rest, including the browser suite that drives
+the real app in headless Chrome at two viewports.
 
 ## License
 

@@ -61,7 +61,8 @@ SetEntry
 
 Derived types that are **not** sources of truth:
 
-- `DailySummary` — belongs to `SummaryRepository`. Deleting a summary never touches a workout.
+- `TrainingSummary` (`kind: 'daily' | 'weekly' | 'monthly'`) — belongs to `SummaryRepository`.
+  Deleting a summary never touches a workout.
 - `Settings` — one document, including the optional AI configuration, the theme, the language
   preference and the vision override.
 - `AliasRule` — user-owned `{ match, normalized }` rename rules.
@@ -112,8 +113,8 @@ Two implementations:
 
 | Adapter | Used by | Notes |
 | --- | --- | --- |
-| `IndexedDbAdapter` | browser dev + fallback | `DB_VERSION = 2`. Collections `workouts`, `rules`, `summaries`, `meals`; key/value stores `settings`, `presets`, `images`, `profile`. |
-| `SqliteAdapter` | Android (production) | `@capacitor-community/sqlite`, `SCHEMA_VERSION = 2`. Tables `workouts`, `alias_rules`, `summaries`, `meals`, `settings`, `presets`, `profile`, `images`, `meta`. |
+| `IndexedDbAdapter` | browser dev + fallback | `DB_VERSION = 3`. Collections `workouts`, `rules`, `summaries`, `meals`, `reminders`, `plans`; key/value stores `settings`, `presets`, `images`, `profile`. |
+| `SqliteAdapter` | Android (production) | `@capacitor-community/sqlite`, `SCHEMA_VERSION = 3`. Tables `workouts`, `alias_rules`, `summaries`, `meals`, `reminders`, `plans`, `settings`, `presets`, `profile`, `images`, `meta`. |
 
 The store names are enumerated once, in the `CollectionName` and `KeyValueName` unions in
 `src/storage/adapter.ts`, so a new collection cannot be added for one backend only. The SQLite schema
@@ -128,6 +129,8 @@ Each concern owns its own store:
 | `rules` | Alias rules | User-owned; resolution must not depend on a workout scan. |
 | `summaries` | Derived daily/weekly/monthly summaries | Makes "deleting a summary cannot affect raw training data" structural. |
 | `meals` | One document per meal | Same local-first contract as workouts. |
+| `reminders` | User reminder definitions | The schedule itself lives in the OS; this store is what it is rebuilt from on every boot. |
+| `plans` | Weekly training plans | A plan is a template, not a record: deleting one leaves every workout it produced untouched. |
 | `images` | One compressed data URL per meal photo | A photo is its own row, so writing a new picture never rewrites the others, and deleting the meal deletes its image. |
 | `profile` | The optional user profile | Never required, never blocking. |
 | `settings` / `presets` | Preferences, and the smoke test's run state | `presets` survives a reload exactly like user data does. |
@@ -157,9 +160,11 @@ meal deletes its photo" are structural guarantees rather than conventions.
 | `ExerciseRepository` | Exercise-centric views folded from workouts: suggestions, history, summary, PR. |
 | `RuleRepository` | User alias rules. Longest match wins. |
 | `SettingsRepository` | App preferences, one key/value document. `patch()` is a read-merge-write and is **serialised** through an internal promise chain, because the settings screen writes one patch per keystroke and two overlapping patches both start from the same snapshot — the second write used to drop the first change. `ProfileRepository` uses the same queue. |
-| `SummaryRepository` | Derived daily summaries, in their own collection. |
-| `ProfileRepository` | The optional user profile, one key/value document (`settingsRepository.ts`). |
+| `SummaryRepository` | Derived daily, weekly and monthly summaries, in their own collection. |
+| `ProfileRepository` | The optional user profile, one key/value document (`settingsRepository.ts`), stored in the `profile` key/value store under the key `userProfile`. |
 | `MealRepository` | Meals and their photos: list by day, save, delete (which deletes the image), plus the pure helpers `createEmptyMeal`, `createEmptyMealItem`, `sumItems`, `summarizeDay` and `imageKeyFor`. |
+| `ReminderRepository` | Reminder definitions, in their own collection (`planRepository.ts`). Normalises kind, time and weekdays on read, and validates the time format on write. |
+| `PlanRepository` | Weekly training plans (`planRepository.ts`), plus `planWeeklySets` and `planTrainingDays`. `save()` enforces **exactly one active plan**, so "which plan am I on" is never ambiguous. |
 
 `buildRepositories()` wires the whole set from a `StorageBundle`; pages call `repositories()` and
 never construct one themselves.
@@ -183,7 +188,7 @@ string search at the call site.
 
 | Module | Responsibility |
 | --- | --- |
-| `src/i18n/en.ts` | The reference catalogue: one nested object, 25 sections. Every other locale is typed against its shape, so adding a key here without translating it is a compile error. |
+| `src/i18n/en.ts` | The reference catalogue: one nested object, 28 sections. Every other locale is typed against its shape, so adding a key here without translating it is a compile error. |
 | `src/i18n/zh-CN.ts`, `src/i18n/es.ts` | Typed against `en`, so a missing or misspelled key fails the type-check before it can reach a user. `src/test/i18n.test.ts` asserts key parity, identical placeholders and that no long string is still English. |
 | `src/i18n/types.ts` | `Messages` (the English shape with literals widened), `MessageKey` (dotted paths to leaves only), `MessageParams`, `Catalogue`. A typo like `home.nope` is a type error, not a blank label. |
 | `src/i18n/index.ts` | `translate`, `translatePlural`, `createTranslator` (returns `t`, `tPlural` and the locale's `intlTag`), and `CATALOGUES` — the messages plus the BCP-47 tag used for `Intl`. |
@@ -353,7 +358,8 @@ BackupDocument {
   format: 'fitness-agent-backup', version, exportedAt, app
   settings: Omit<Settings, 'aiApiKey'>   // the key is structurally excluded
   workouts[], aliasRules[], summaries[]
-  meals[], profile: UserProfile | null
+  meals[], reminders[], plans[]
+  profile: UserProfile | null
 }
 ```
 
@@ -385,7 +391,7 @@ Three layers handle that, and each is covered by `src/test/migration.test.ts`:
   would quietly corrupt every AI request, and the retired pre-theme `colorScheme` value is simply
   dropped in favour of the default theme. `SettingsRepository.ensureInitialized()` writes the
   normalised document back, so a migration completes instead of being re-derived on every read.
-- **Storage.** IndexedDB opens at `DB_VERSION = 2` and SQLite at `SCHEMA_VERSION = 2`. Both upgrades
+- **Storage.** IndexedDB opens at `DB_VERSION = 3` and SQLite at `SCHEMA_VERSION = 3`. Both upgrades
   are additive: `onupgradeneeded` creates only the object stores that are missing, and the SQLite
   schema is a list of `CREATE TABLE IF NOT EXISTS`. A level-1 database therefore keeps every row it
   had — the test builds one by hand, saves a workout, opens it through the app and asserts the
@@ -512,6 +518,7 @@ is in use, and no page has to special-case "AI is disabled".
 | `openaiProvider.ts` | `POST {baseUrl}/chat/completions`. `fetch` is injectable, so the client is fully testable offline. Messages are posted as given, which is what lets a multimodal message through unchanged. |
 | `prompts.ts` | System prompts for the three roles plus the parse/normalize/summarize prompts. |
 | `localParser.ts` | The offline parser. Chinese and English, mixed freely. |
+| `proposals.ts` | `proposeReminders` and `proposePlan`: the two places the model is allowed to *suggest* something the user then edits. Both validate every field and return proposals only — nothing in this module writes to storage. |
 | `contextBuilder.ts` | Assembles the smallest context that can answer the question. |
 | `materialize.ts` | Turns a *confirmed* draft into records. |
 | `vision.ts` | Model capability detection: `supported` / `unsupported` / `unknown` from model-name families, plus the user override, the `image_url` content part and `looksLikeVisionRejection()`. |
@@ -654,7 +661,7 @@ whole month's JSON is never handed to a model.
 Design decisions worth keeping:
 
 - **A summary never invents a number.** Unknown exercise names contribute nothing to the
-  day's title rather than being guessed at, and a change smaller than one plate is not
+  day's title rather than being guessed at, and a change below 1 kg (2 lb) is not
   reported as a change.
 - **Focus attribution is one group per exercise**, so "Overhead Press" cannot be counted
   as both chest and shoulder work.
@@ -772,7 +779,8 @@ display problem must never look like data loss:
 - **Paged lists.** History renders 60 workouts at a time and Meals 40, each with a "show
   more" button. A multi-year history is thousands of cards, and rendering them all makes
   scrolling and editing sluggish on a phone. The meals list also loads thumbnails for the
-  visible rows only, so a long food log never reads every photo out of the database at once.
+  first page (40 rows) rather than on every "show more", so scrolling a long food log never
+  reads every photo out of the database one row at a time.
 
 The crash screen is translated, which is why `i18n/runtime.ts` exists: a class component cannot call
 `useI18n()`, and the chosen language lives in a settings document that is only reachable through an
@@ -782,7 +790,8 @@ just failed. It is plain DOM — no router, no context, no storage — because t
 from any of those, and its one escape hatch (`#/data`) is a hash the user can type even if a button
 is unreachable.
 
-`TrainingRepository.complete()` always stamps the wall clock as the end time, so the
+`TrainingRepository.complete()` keeps an existing end time and stamps the wall clock only when
+there is none (`workout.endTime ?? nowIso()`), so the
 duration can never be negative. The workout detail screen offers **Reopen as in-progress**
 for the case where a session was finished by mistake — "finished" is a state, not a lock.
 
@@ -790,7 +799,7 @@ for the case where a session was finished by mistake — "finished" is a state, 
 
 | Command | What it covers |
 | --- | --- |
-| `npm test` | 270 tests in 47 suites (`src/**/*.test.ts`): repositories, units and formatting, metrics, alias rules, exercise history and personal bests, anomaly detection and the correction path, summary builders / service / catch-up / polish, Markdown and CSV exports, backup/restore and v1 compatibility, migrations, settings-write serialisation, **reminder scheduling arithmetic and plan normalisation**, **AI proposal parsing**, **streamed-chunk reading**, the offline parser, the context builder, the OpenAI client against a mocked `fetch`, theme tokens, status-bar icon selection, the pixel sprites, **motif and scenery composition**, catalogue parity **and completeness** across the three locales, vision capability detection, meal analysis and the profile context, the **real** `IndexedDbAdapter` via `fake-indexeddb`, and the `SqliteAdapter`'s real SQL via a fake Capacitor plugin. |
+| `npm test` | 271 tests in 53 suites (`src/**/*.test.ts`): repositories, units and formatting, metrics, alias rules, exercise history and personal bests, anomaly detection and the correction path, summary builders / service / catch-up / polish, Markdown and CSV exports, backup/restore and v1 compatibility, migrations, settings-write serialisation, **reminder scheduling arithmetic and plan normalisation**, **AI proposal parsing**, **streamed-chunk reading**, the offline parser, the context builder, the OpenAI client against a mocked `fetch`, theme tokens, status-bar icon selection, the pixel sprites, **motif and scenery composition**, catalogue parity **and completeness** across the three locales, vision capability detection, meal analysis and the profile context, the **real** `IndexedDbAdapter` via `fake-indexeddb`, and the `SqliteAdapter`'s real SQL via a fake Capacitor plugin. |
 | `npm run test:browser` | `scripts/smoke.ps1` starts a throwaway Vite server and drives headless Chrome (or Edge) over CDP through the real app with `?smoke=1`, twice: at a phone viewport (390×844) and a desktop one (1280×900), each in its own browser profile so the two runs cannot influence each other. The in-page suite in `src/dev/browserSmoke.ts` records and finishes a workout across two page reloads, walks exercise history (chart metric toggle, PR badge), rules, backup round-trip, Markdown/CSV export, the browser download path, Quick Log preview+confirm, the AI page with AI off, summaries, the outlier review, manual meal entry/edit/delete, the vision-specific refusal, language switching in both directions, theme switching, and the responsive layout — then crashes a component through the real error boundary and asserts React logged no console errors. Every check must pass at both viewports. |
 | `npm run verify` | lint + typecheck + tests + production build. |
 
