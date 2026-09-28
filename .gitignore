@@ -1,0 +1,44 @@
+# Dependencies and build output
+node_modules
+dist
+dist-ssr
+*.local
+
+# Packaged binaries: the APK is published as a GitHub release asset, not committed —
+# a 28 MB debug build in the history would outweigh the entire source tree.
+*.apk
+*.aab
+*.keystore
+!android/app/debug.keystore
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# Capacitor / Android build output
+android/.gradle
+android/app/build
+android/build
+android/local.properties
+android/.idea
+android/app/src/main/assets/public
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/app/src/main/res/xml/config.xml
+android/capacitor-cordova-android-plugins
+
+# Generated design artefacts. The generators are committed; their output is not,
+# except the small preview PNGs used as documentation.
+design/**/.render
+design/**/.render-splash
+design/**/.render-preview
+design/theme-art/preview.html
+
+# Logs and local environment
+*.log
+npm-debug.log*
+.env
+.env.*

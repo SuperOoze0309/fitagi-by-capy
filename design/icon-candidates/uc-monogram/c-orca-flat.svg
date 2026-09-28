@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="UCFit icon concept C: white U arm with a teal C fist on ocean blue">
+  <defs>
+    <linearGradient id="cBg" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#15466a"/>
+      <stop offset="1" stop-color="#08192b"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#cBg)"/>
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#35c6d8" stroke-width="8" opacity="0.26"/>
+
+  <g transform="translate(256 256) scale(0.84) translate(-270 -226)">
+    <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M144 156 L144 300 Q144 364 254 364 Q364 364 364 300 L364 156" stroke-width="66"/>
+      <path d="M144 176 L144 292" stroke-width="98"/>
+    </g>
+    <circle
+      cx="364" cy="134" r="56"
+      fill="none" stroke="#35c6d8" stroke-width="58" stroke-linecap="butt"
+      stroke-dasharray="275.6 76.2" stroke-dashoffset="-175.0"
+    />
+  </g>
+</svg>

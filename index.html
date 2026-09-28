@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#0f1115" />
+    <title>FitAGI by Capy</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <!-- smoke-test:start -->
+    <script>
+      // Opt-in browser smoke test: `npm run test:browser` opens /?smoke=1.
+      // Loaded as a separate entry so no test code is imported by the app.
+      // This block is stripped from production builds (see vite.config.ts).
+      if (new URLSearchParams(location.search).get('smoke') === '1') {
+        const tag = document.createElement('script');
+        tag.type = 'module';
+        tag.src = '/src/dev/smokeEntry.ts';
+        document.head.appendChild(tag);
+      }
+    </script>
+    <!-- smoke-test:end -->
+  </body>
+</html>

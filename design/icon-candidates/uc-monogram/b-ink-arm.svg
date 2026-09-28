@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="UCFit icon concept B: solid ink arm with the U and C cut out of it">
+  <rect width="512" height="512" fill="#f6f6f4"/>
+
+  <g transform="translate(256 256) scale(0.84) translate(-270 -226)">
+    <g fill="none" stroke="#17181c" stroke-linecap="round" stroke-linejoin="round">
+      <!-- One solid arm: the same skeleton, heavier. -->
+      <path d="M144 156 L144 300 Q144 364 254 364 Q364 364 364 300 L364 156" stroke-width="104"/>
+      <path d="M144 176 L144 292" stroke-width="128"/>
+    </g>
+    <circle cx="364" cy="134" r="86" fill="#17181c"/>
+
+    <!-- U and C cut back out of the ink, so the letters are the negative space. -->
+    <g fill="none" stroke="#f6f6f4" stroke-linecap="butt">
+      <path
+        d="M144 168 L144 300 Q144 352 254 352 Q364 352 364 300 L364 168"
+        stroke-width="22" stroke-linejoin="round"
+      />
+      <circle
+        cx="364" cy="134" r="44"
+        stroke-width="22"
+        stroke-dasharray="202.7 73.7" stroke-dashoffset="-144.4"
+      />
+    </g>
+  </g>
+</svg>

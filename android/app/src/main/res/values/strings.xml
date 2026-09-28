@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FitAGI by Capy</string>
+    <string name="title_activity_main">FitAGI by Capy</string>
+    <string name="package_name">app.fitnessagent.tracker</string>
+    <string name="custom_url_scheme">app.fitnessagent.tracker</string>
+</resources>

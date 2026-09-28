@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="UCFit icon concept D: the arm tilted into a flex, on a soft rose squircle">
+  <rect width="512" height="512" fill="#ffeef5"/>
+  <rect x="22" y="22" width="468" height="468" rx="112" fill="#ffffff"/>
+
+  <g transform="translate(256 262) rotate(-38) scale(0.84) translate(-270 -226)">
+    <g fill="none" stroke="#d81b60" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M144 156 L144 300 Q144 364 254 364 Q364 364 364 300 L364 156" stroke-width="66"/>
+      <path d="M144 176 L144 292" stroke-width="98"/>
+    </g>
+    <circle
+      cx="364" cy="134" r="56"
+      fill="none" stroke="#d81b60" stroke-width="58" stroke-linecap="butt"
+      stroke-dasharray="275.6 76.2" stroke-dashoffset="-175.0"
+    />
+  </g>
+</svg>

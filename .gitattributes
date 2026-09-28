@@ -1,0 +1,15 @@
+# Normalise line endings in the repository, so a Windows checkout and a Linux CI run
+# see the same bytes.
+* text=auto
+# The PowerShell scripts are Windows-only and are decoded by PowerShell 5.1, which
+# treats a BOM-less file as ANSI — keep them CRLF so an editor does not rewrite them.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+# Binary assets: never let Git touch these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.apk binary
+*.aab binary
+*.keystore binary

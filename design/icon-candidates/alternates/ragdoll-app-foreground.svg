@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="FitAGI by Capy adaptive icon foreground">
+  <!--
+    Adaptive-icon foreground: the cat only, no background, scaled to 0.72 so the
+    whiskers stay inside the safe circle (66% of the canvas) that every launcher
+    mask is guaranteed to show.
+  -->
+  <g transform="translate(256 256) scale(0.72) translate(-256 -256)">
+    <g stroke="#4b4550" stroke-width="13" stroke-linejoin="round">
+      <path d="M150 200 L128 92 L232 148 Z" fill="#a79f97"/>
+      <path d="M362 200 L384 92 L280 148 Z" fill="#a79f97"/>
+    </g>
+    <g fill="#e58aa6">
+      <path d="M162 186 L148 122 L214 156 Z"/>
+      <path d="M350 186 L364 122 L298 156 Z"/>
+    </g>
+
+    <defs>
+      <clipPath id="fgHead">
+        <path d="M256 116 C332 116 402 176 402 262 C402 352 336 420 256 420 C176 420 110 352 110 262 C110 176 180 116 256 116 Z"/>
+      </clipPath>
+    </defs>
+
+    <path
+      d="M256 116 C332 116 402 176 402 262 C402 352 336 420 256 420 C176 420 110 352 110 262 C110 176 180 116 256 116 Z"
+      fill="#fdfbf8" stroke="#4b4550" stroke-width="13"
+    />
+    <g clip-path="url(#fgHead)">
+      <path
+        d="M110 116 L402 116 L402 250 C360 286 330 262 292 268 C250 275 232 300 196 292 C160 284 130 300 110 282 Z"
+        fill="#d6cfc8"
+      />
+      <path d="M256 250 C276 250 288 276 286 316 L226 316 C224 276 236 250 256 250 Z" fill="#fdfbf8"/>
+    </g>
+
+    <ellipse cx="196" cy="286" rx="35" ry="38" fill="#5f8fbf" stroke="#4b4550" stroke-width="11"/>
+    <ellipse cx="316" cy="286" rx="35" ry="38" fill="#5f8fbf" stroke="#4b4550" stroke-width="11"/>
+    <circle cx="207" cy="272" r="11" fill="#ffffff"/>
+    <circle cx="327" cy="272" r="11" fill="#ffffff"/>
+
+    <path d="M256 322 C272 322 282 332 282 342 C282 354 268 364 256 364 C244 364 230 354 230 342 C230 332 240 322 256 322 Z" fill="#e58aa6" stroke="#4b4550" stroke-width="10"/>
+    <path d="M256 366 L256 382 M256 382 C246 396 228 396 220 386 M256 382 C266 396 284 396 292 386"
+          fill="none" stroke="#4b4550" stroke-width="10" stroke-linecap="round"/>
+
+    <g stroke="#4b4550" stroke-width="9" stroke-linecap="round" fill="none">
+      <path d="M96 300 L34 284"/>
+      <path d="M98 330 L32 330"/>
+      <path d="M100 360 L40 380"/>
+      <path d="M416 300 L478 284"/>
+      <path d="M414 330 L480 330"/>
+      <path d="M412 360 L472 380"/>
+    </g>
+
+    <path
+      d="M420 96 C420 82 434 74 446 82 C452 74 468 74 474 84 C482 98 466 116 447 132 C428 116 420 106 420 96 Z"
+      fill="#f2a3bd"
+    />
+  </g>
+</svg>

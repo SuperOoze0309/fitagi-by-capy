@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="UCFit icon concept A: a U-shaped arm with a C for the fist">
+  <defs>
+    <linearGradient id="aBg" x1="0.08" y1="0" x2="0.92" y2="1">
+      <stop offset="0" stop-color="#ffa3cb"/>
+      <stop offset="0.48" stop-color="#c98ce0"/>
+      <stop offset="1" stop-color="#5b86e5"/>
+    </linearGradient>
+    <radialGradient id="aGlow" cx="0.38" cy="0.24" r="0.8">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#aBg)"/>
+  <rect width="512" height="512" fill="url(#aGlow)"/>
+
+  <!-- Drawn in its own coordinates, then fitted into the adaptive-icon safe zone
+       (ink bbox 97..443 x 53..400 maps to roughly 110..402). -->
+  <g transform="translate(256 256) scale(0.84) translate(-270 -226)">
+    <g fill="#fffdf9">
+      <!-- U: the arm. 64-wide limbs with a 112 gap, so the notch stays open. -->
+      <path
+        d="M144 156 L144 300 Q144 364 254 364 Q364 364 364 300 L364 156"
+        fill="none" stroke="#fffdf9" stroke-width="64"
+        stroke-linecap="round" stroke-linejoin="round"
+      />
+      <!-- the shoulder: the upper arm is heavier and ends rounder than the
+           forearm, which is what makes one side read as muscle. -->
+      <path
+        d="M144 176 L144 292"
+        fill="none" stroke="#fffdf9" stroke-width="96" stroke-linecap="round"
+      />
+    </g>
+
+    <!-- C: the fist over the top of the forearm. The wedge opens down-left, into
+         the fold, where a fist actually closes. -->
+    <circle
+      cx="364" cy="134" r="56"
+      fill="none" stroke="#fffdf9" stroke-width="58" stroke-linecap="butt"
+      stroke-dasharray="275.6 76.2" stroke-dashoffset="-175.0"
+    />
+  </g>
+</svg>

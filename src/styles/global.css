@@ -1,0 +1,1700 @@
+/* ==========================================================================
+   Fitness Agent — design system
+
+   Two rules shape this file:
+
+   1. Colour comes from theme tokens only. Every colour below is a `var(--token)`
+      published by `applyTheme()`, so a new theme needs no CSS change.
+   2. Size is fluid. Fixed pixel widths appear only where something genuinely has
+      a fixed size (touch targets, icon buttons, the nav rail). Everything else is
+      `rem`, `fr`, `clamp()` or `min()`, and layout adapts through breakpoints
+      rather than a hard-coded 360×800 assumption.
+   ========================================================================== */
+
+:root {
+  /* Fluid type scale: grows with the viewport but stays readable on a phone. */
+  --font-base: clamp(0.9375rem, 0.9rem + 0.2vw, 1rem);
+  --font-sm: clamp(0.8125rem, 0.79rem + 0.15vw, 0.875rem);
+  --font-xs: clamp(0.75rem, 0.73rem + 0.1vw, 0.8125rem);
+  --font-lg: clamp(1.0625rem, 1rem + 0.3vw, 1.1875rem);
+  --font-xl: clamp(1.25rem, 1.1rem + 0.6vw, 1.5rem);
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+
+  /*
+   * Corner radii.
+   *
+   * The look is deliberately generous — a card is a rounded object, not a rectangle
+   * with a clipped corner — and the scale runs from a chip to a sheet so nested
+   * surfaces stay concentric: an inner radius is always one step smaller than the
+   * surface it sits on. Everything that has a corner reads from these five values,
+   * which is what keeps the rounding consistent instead of ad hoc.
+   */
+  --radius-pill: 999px;
+  --radius-xs: 0.5rem;
+  --radius-sm: 0.75rem;
+  --radius: 1.125rem;
+  --radius-lg: 1.5rem;
+  --radius-xl: 1.875rem;
+
+  /* Touch targets never shrink below this, whatever the screen. */
+  --tap: 2.5rem;
+
+  --nav-height: 3.5rem;
+  --header-height: 3.25rem;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* Reading width for a single column of content. */
+  --measure: 42rem;
+  /* Rail width once the layout switches to side navigation. */
+  --rail: 13.5rem;
+
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Fallbacks so the very first paint is never unstyled; applyTheme() overwrites
+     these with the active theme's tokens as soon as settings are read. */
+  --bg: #fff6f9;
+  --bg-elevated: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: #ffeef4;
+  --surface-secondary: #ffe9f1;
+  --border: #f5d9e4;
+  --border-strong: #e7bfd0;
+  --text: #3a2530;
+  --text-muted: #7d6070;
+  --text-faint: #a98c9a;
+  --accent: #4f7fe0;
+  --accent-alt: #4f7fe0;
+  --accent-text: #ffffff;
+  --accent-soft: rgba(79, 127, 224, 0.14);
+  --primary: #f06fa0;
+  --on-primary: #ffffff;
+  --success: #2f9e5f;
+  --warn: #c98a1a;
+  --danger: #d64562;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--font-base);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------- app shell */
+
+/*
+ * The shell is a grid so the rail and the content can share space without any
+ * measured widths. On a phone it is a single column; from 56rem up it becomes
+ * `rail | content`, which is what gives an unfolded foldable or a tablet a
+ * sensible layout with no JavaScript breakpoint logic.
+ */
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    'header'
+    'main';
+  min-height: 100%;
+  background: var(--bg);
+}
+
+.app-header {
+  grid-area: header;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--header-height);
+  padding: calc(var(--safe-top) + var(--space-2)) var(--space-3) var(--space-2);
+  padding-left: calc(var(--space-3) + var(--safe-left));
+  padding-right: calc(var(--space-3) + var(--safe-right));
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header h1 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--font-lg);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-header .subtitle {
+  display: block;
+  font-size: var(--font-xs);
+  font-weight: 400;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-header .header-mascot {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+.app-rail {
+  grid-area: rail;
+  display: none;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-2);
+  padding-left: calc(var(--space-2) + var(--safe-left));
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+.app-rail a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  font-weight: 550;
+}
+
+.app-rail a.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.app-rail a:hover:not(.active) {
+  background: var(--bg-hover);
+}
+
+.app-rail .rail-icon {
+  font-size: 1.125rem;
+  line-height: 1;
+  width: 1.25rem;
+  text-align: center;
+  flex: none;
+}
+
+.app-main {
+  grid-area: main;
+  min-width: 0;
+  padding: var(--space-3);
+  padding-left: calc(var(--space-3) + var(--safe-left));
+  padding-right: calc(var(--space-3) + var(--safe-right));
+  padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-5));
+}
+
+.app-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
+}
+
+.app-nav a {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: var(--nav-height);
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-nav a.active {
+  color: var(--accent);
+}
+
+.app-nav .nav-icon {
+  font-size: 1.0625rem;
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------ breakpoints */
+
+.content {
+  width: 100%;
+  max-width: var(--measure);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ≥ 40rem: tablets in portrait, unfolded foldables, landscape phones. */
+@media (min-width: 40rem) {
+  :root {
+    --measure: 46rem;
+  }
+
+  .app-main {
+    padding: var(--space-4);
+    padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-5));
+  }
+
+  /* Two columns where a pair genuinely belongs together. */
+  .split {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+    align-items: start;
+  }
+}
+
+/* ≥ 56rem: large tablets and desktop-sized devices get the side rail. */
+@media (min-width: 56rem) {
+  :root {
+    --measure: 58rem;
+  }
+
+  .app-shell {
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      'rail header'
+      'rail main';
+  }
+
+  .app-rail {
+    display: flex;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  /* The bottom bar is redundant once the rail exists. */
+  .app-nav {
+    display: none;
+  }
+
+  .app-main {
+    padding-bottom: var(--space-5);
+  }
+
+  .app-header {
+    padding-left: var(--space-4);
+  }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+    align-items: start;
+  }
+}
+
+/* ≥ 75rem: near-desktop proportions. The extra room goes to a wider column, and
+   long-form content stays capped so lines remain readable. */
+@media (min-width: 75rem) {
+  :root {
+    --measure: 66rem;
+    --rail: 15rem;
+  }
+
+  .app-main {
+    padding: var(--space-5);
+  }
+}
+
+/* Landscape phones: the bottom bar must not eat the screen height. */
+@media (max-height: 30rem) and (orientation: landscape) {
+  :root {
+    --nav-height: 2.875rem;
+    --header-height: 2.75rem;
+  }
+}
+
+/* Very narrow phones (≈320px): tighten spacing rather than overflow. */
+@media (max-width: 22.5rem) {
+  :root {
+    --space-3: 0.625rem;
+  }
+
+  .stat-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ------------------------------------------------------------------ generic */
+
+.card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  min-width: 0;
+}
+
+/*
+ * A card inside a card steps one radius down, so the two curves stay concentric —
+ * equal radii on nested boxes look wrong because the inner corner appears tighter.
+ */
+.card .card {
+  border-radius: var(--radius-sm);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.card + .card {
+  margin-top: var(--space-3);
+}
+
+.card-clickable {
+  cursor: pointer;
+}
+
+.card-clickable:active {
+  background: var(--bg-hover);
+}
+
+.card-clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.exercise-head a.exercise-name {
+  color: inherit;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Wraps instead of overflowing when a row holds more chips than fit. */
+.row-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.spread {
+  flex: 1;
+  min-width: 0;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.faint {
+  color: var(--text-faint);
+}
+
+.small {
+  font-size: var(--font-sm);
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
+}
+
+/* Long unbroken strings (a URL, a pasted food name) must not widen the layout. */
+.break {
+  overflow-wrap: anywhere;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: var(--space-4) 2px var(--space-2);
+  font-size: var(--font-xs);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.page-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.empty {
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+}
+
+.empty strong {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--text);
+}
+
+/* -------------------------------------------------------------- crash screen */
+
+/*
+ * The fallback rendered by `ErrorBoundary`. It carries its own background and
+ * padding because it may replace the whole document, including `.app-shell`.
+ */
+.crash-screen {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4);
+  color: var(--text);
+}
+
+.crash-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-xl);
+}
+
+.crash-subtitle {
+  margin: 0 0 var(--space-2);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.crash-steps {
+  margin: 0 0 var(--space-3);
+  padding-left: 1.25em;
+  color: var(--text-muted);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.crash-detail {
+  margin-top: var(--space-4);
+  color: var(--text-faint);
+  font-size: var(--font-sm);
+}
+
+.crash-detail pre {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3);
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  font-family: var(--mono);
+  font-size: var(--font-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ buttons */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  /* Pills: the rest of the interface is rounded, and a stadium button is the shape
+     that reads as "tap me" without needing a shadow. */
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: var(--font-sm);
+  font-weight: 550;
+  text-align: center;
+  transition: background 120ms ease;
+}
+
+.btn:active {
+  background: var(--bg-hover);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+.btn-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.btn-danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn-sm {
+  min-height: 2rem;
+  padding: 0 var(--space-2);
+  font-size: var(--font-sm);
+}
+
+.btn-icon {
+  min-height: 2.125rem;
+  min-width: 2.125rem;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1rem;
+  flex: none;
+}
+
+.btn-icon:active {
+  background: var(--bg-hover);
+}
+
+.btn-hero {
+  width: 100%;
+  min-height: 3.375rem;
+  font-size: var(--font-lg);
+}
+
+/* ------------------------------------------------------------------- inputs */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.field > label {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-input);
+  color: var(--text);
+  outline: none;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: var(--accent);
+}
+
+.textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+/*
+ * Numeric cell used by the set grid. Its width comes from the grid track, never
+ * from a fixed pixel value, so it survives every screen width.
+ */
+.input-cell {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.375rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.input-cell:focus {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.input-cell.weight {
+  font-weight: 600;
+}
+
+.switch {
+  position: relative;
+  width: 2.75rem;
+  height: 1.625rem;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  transition: background 140ms ease;
+  flex: none;
+}
+
+.switch[data-on='true'] {
+  background: var(--primary);
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 140ms ease;
+}
+
+.switch[data-on='true']::after {
+  transform: translateX(1.125rem);
+}
+
+/* Segmented control: scrolls sideways rather than squashing its options. */
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.segmented::-webkit-scrollbar {
+  display: none;
+}
+
+.segmented button {
+  min-height: 1.875rem;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  flex: none;
+}
+
+.segmented button[data-active='true'] {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+/* -------------------------------------------------------------------- lists */
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) 2px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  color: inherit;
+  min-width: 0;
+}
+
+.list-item:last-child {
+  border-bottom: none;
+}
+
+.list-item:active {
+  background: var(--bg-hover);
+}
+
+.list-item .li-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.list-item .li-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-item .li-sub {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  color: var(--text-faint);
+  font-size: 0.9375rem;
+  flex: none;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.25rem;
+  padding: 0 0.4375rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--font-xs);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.badge.neutral {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+}
+
+.badge.warn {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  color: var(--warn);
+}
+
+.badge.live {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  color: var(--success);
+}
+
+.badge.primary {
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  color: var(--primary);
+}
+
+/* ------------------------------------------------------------------- stats */
+
+/*
+ * `auto-fit` + `minmax` gives two columns on a phone and four on a tablet from
+ * the same markup — no media query and no fixed card count.
+ */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: var(--space-3);
+}
+
+.stat-label {
+  font-size: var(--font-xs);
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.stat-value {
+  margin-top: 2px;
+  font-size: var(--font-base);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.confirm-text {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------- workout page */
+
+.workout-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.timer {
+  font-size: var(--font-xl);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
+}
+
+.exercise-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.exercise-card + .exercise-card {
+  margin-top: var(--space-3);
+}
+
+.exercise-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-secondary);
+  min-width: 0;
+}
+
+.exercise-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The set grid. `fr` tracks share whatever width is available, and on a tablet
+ * the secondary fields move onto the same line as the main ones.
+ */
+.set-grid {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr) minmax(0, 1fr) 2.25rem 1.875rem;
+  gap: var(--space-1);
+  align-items: center;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+}
+
+.set-grid.header {
+  padding-top: var(--space-2);
+  padding-bottom: 2px;
+  font-size: var(--font-xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.set-grid.header span {
+  text-align: center;
+}
+
+.set-grid.header span:first-child {
+  text-align: left;
+}
+
+.set-grid.extra {
+  grid-template-columns: 1.5rem minmax(0, 1fr) minmax(0, 1fr);
+  padding-top: 0;
+}
+
+.set-index {
+  font-size: var(--font-sm);
+  font-weight: 650;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The read-only set row in the workout detail view reuses `.set-row` for its
+ * divider; this keeps the "1 / Warmup" gutter from jumping as it changes width.
+ */
+.set-num {
+  min-width: 3.25rem;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.set-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: 0 var(--space-2) var(--space-2) var(--space-3);
+}
+
+.flag-toggle {
+  min-height: 1.75rem;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.flag-toggle[data-on='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.set-row {
+  border-bottom: 1px solid var(--border);
+}
+
+.set-row:last-child {
+  border-bottom: none;
+}
+
+.exercise-foot {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.exercise-foot .btn {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (min-width: 40rem) {
+  .set-grid {
+    grid-template-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) 3.5rem 3.5rem 2.25rem 1.875rem;
+  }
+
+  /* The secondary row is folded into the main one at this width. */
+  .set-grid.extra {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------- meal logging */
+
+.macro-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+  gap: var(--space-2);
+}
+
+.macro {
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-secondary);
+  text-align: center;
+  min-width: 0;
+}
+
+.macro-label {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.macro-value {
+  font-size: var(--font-lg);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.meal-photo {
+  width: 100%;
+  max-height: 18rem;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
+}
+
+.meal-photo-thumb {
+  width: 3rem;
+  height: 3rem;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  flex: none;
+  background: var(--surface-secondary);
+}
+
+/* Photo actions sit side by side, or stack when both will not fit. */
+.photo-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-2);
+}
+
+/* ---------------------------------------------------------------- overlays */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/*
+ * Sheets are anchored to the bottom on a phone (thumb reach) and become a
+ * centred dialog once there is room, where a full-width sheet would be a metre
+ * wide. `dvh` keeps them on screen when the keyboard opens.
+ */
+.sheet {
+  width: 100%;
+  max-width: var(--measure);
+  max-height: 88dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevated);
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+  padding-bottom: var(--safe-bottom);
+  animation: sheet-in 140ms ease-out;
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(0.75rem);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    animation: none;
+  }
+}
+
+@media (min-width: 40rem) {
+  .overlay {
+    align-items: center;
+    padding: var(--space-4);
+  }
+
+  .sheet {
+    border-radius: var(--radius-lg);
+    max-height: 84dvh;
+    max-width: 34rem;
+  }
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.sheet-head h2 {
+  margin: 0;
+  font-size: var(--font-lg);
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+  -webkit-overflow-scrolling: touch;
+}
+
+.sheet-foot {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.sheet-foot .btn {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-4));
+  transform: translateX(-50%);
+  z-index: 200;
+  max-width: min(92vw, 30rem);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: var(--font-sm);
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+}
+
+@media (min-width: 56rem) {
+  .toast {
+    bottom: var(--space-4);
+  }
+}
+
+.toast[data-tone='error'] {
+  background: var(--danger);
+  color: #fff;
+}
+
+.toast[data-tone='success'] {
+  background: var(--success);
+  color: #fff;
+}
+
+.banner {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-input);
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  min-width: 0;
+}
+
+.banner.warn {
+  border-color: color-mix(in srgb, var(--warn) 50%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------ splash */
+
+.splash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  height: 100%;
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------ theme picker */
+
+.theme-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: var(--space-2);
+}
+
+.theme-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2);
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+  background: var(--bg-elevated);
+  text-align: center;
+  min-width: 0;
+}
+
+.theme-option[data-active='true'] {
+  border-color: var(--primary);
+}
+
+.theme-option .theme-name {
+  font-weight: 650;
+  font-size: var(--font-sm);
+}
+
+.theme-option .theme-hint {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
+.theme-swatch {
+  display: flex;
+  gap: 3px;
+}
+
+.theme-swatch span {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+}
+
+/* ------------------------------------------------------------------ charts */
+
+.chart-readout {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* AI chat: bubbles adapt to the available width instead of a fixed max. */
+.chat-thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.chat-bubble {
+  max-width: min(100%, 34rem);
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-bubble.user {
+  align-self: flex-end;
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+.chat-bubble.assistant {
+  align-self: flex-start;
+}
+
+.chat-composer {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-end;
+}
+
+.chat-composer textarea {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------- profile / settings */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+@media (min-width: 40rem) {
+  .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .form-grid .span-2 {
+    grid-column: 1 / -1;
+  }
+}
+
+.preview-block {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: var(--font-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A section wrapper so pages get consistent width handling for free. */
+.page {
+  width: 100%;
+  max-width: var(--measure);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Bullet lists inside cards; the indent is set here rather than inline. */
+.list-tight {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.2em;
+  display: grid;
+  gap: var(--space-1);
+}
+
+/* ------------------------------------------------------------ theme scenery */
+
+/*
+ * Decorative theme art: a row of the current theme's motifs along the bottom of a
+ * card. Pure decoration, so it never takes a tap and never carries meaning that is
+ * not in the text beside it.
+ */
+.scenery {
+  pointer-events: none;
+  user-select: none;
+  line-height: 0;
+}
+
+.scenery-art {
+  display: block;
+  width: 100%;
+  /* Height follows the sprite's own aspect ratio, so pixels stay square at any
+     width instead of being stretched to a square box. */
+  height: auto;
+  max-width: 17.5rem;
+  margin: 0 auto;
+}
+
+/* The tinted band the scenery stands on, used behind hero cards. */
+.scenery-band {
+  background: var(--surface-secondary);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.empty .scenery-art {
+  max-width: 12rem;
+  margin-bottom: var(--space-2);
+}
+
+/* A form label that reads as a field title rather than as uppercase chrome. */
+.label-strong {
+  display: block;
+  font-weight: 600;
+}
+
+/* A wrapping row of small pill buttons, e.g. the Quick Log example phrases. */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/* An input that is edited in place and should not look like a box until focused. */
+.input-bare {
+  min-height: 2.125rem;
+  font-weight: 650;
+  border-color: transparent;
+  background: transparent;
+}
+
+.input-bare:focus {
+  border-color: var(--accent);
+  background: var(--bg-input);
+}
+
+/* ------------------------------------------------------------------ ai chat */
+
+/*
+ * The AI page is a conversation, not a form: the thread takes the height it can,
+ * and the composer is docked at the bottom where a messaging app puts it. Sticky
+ * rather than fixed, so it lives inside the page's own scroll container and never
+ * fights the bottom navigation.
+ */
+.chat-main {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.chat-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: var(--space-3);
+}
+
+.chat-scroll {
+  flex: 1;
+  min-height: 12rem;
+  max-height: 62vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+  gap: var(--space-3);
+}
+
+.chat-empty {
+  padding: var(--space-5) var(--space-2);
+  text-align: center;
+}
+
+.chat-turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+/* The question is a bubble on the right, the answer a card on the left: the shape
+   alone says who said what, without reading the labels. */
+.chat-bubble {
+  max-width: 92%;
+  padding: var(--space-3) var(--space-3);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.chat-bubble.user {
+  align-self: flex-end;
+  border-bottom-right-radius: var(--radius-xs);
+  background: var(--accent-soft);
+  border-color: transparent;
+  font-weight: 550;
+}
+
+.chat-bubble.assistant {
+  align-self: flex-start;
+  border-bottom-left-radius: var(--radius-xs);
+}
+
+.chat-bubble-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.chat-answer {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A blinking block that says "still typing", the way a terminal cursor does. */
+.chat-caret {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: caret-blink 1s steps(2, start) infinite;
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-caret {
+    animation: none;
+  }
+}
+
+.chat-context {
+  margin-top: var(--space-2);
+}
+
+.chat-composer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  /* Opaque, so the thread scrolling behind it does not show through the gap. */
+  background: linear-gradient(
+    to bottom,
+    transparent 0,
+    var(--bg) var(--space-3),
+    var(--bg) 100%
+  );
+}
+
+.chat-suggestions {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.chat-suggestions::-webkit-scrollbar {
+  display: none;
+}
+
+.chat-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+/* Grows with the text up to a point, then scrolls: a chat box should never eat the
+   conversation. */
+.chat-input {
+  flex: 1;
+  min-height: var(--tap);
+  max-height: 7rem;
+  resize: none;
+  border-radius: var(--radius-lg);
+  field-sizing: content;
+}
+
+.chat-send {
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+  font-size: var(--font-lg);
+}
+
+/* -------------------------------------------------------------- reminders */
+
+.reminder-time {
+  flex: none;
+  min-width: 3.25rem;
+  font-size: var(--font-lg);
+  font-weight: 650;
+}
+
+/* ------------------------------------------------------------------ plans */
+
+/* A week at a glance: one cell per day, filled when the day has work in it. */
+.week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+.week-cell {
+  display: grid;
+  place-items: center;
+  padding: var(--space-1) 0;
+  border-radius: var(--radius-xs);
+  background: var(--surface-secondary);
+  color: var(--text-faint);
+  font-size: var(--font-xs);
+  font-weight: 600;
+}
+
+.week-cell[data-state='train'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.flag-toggle[data-training='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.plan-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3.5rem 4.5rem auto;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.plan-sets,
+.plan-reps {
+  text-align: center;
+}
+
+/* ------------------------------------------------------------ first run */
+
+/*
+ * The welcome screen has no navigation: there is nowhere to go yet, and offering
+ * five destinations before the app has permission to do anything is noise.
+ */
+.app-shell-plain {
+  display: block;
+  padding-top: var(--safe-top);
+}
+
+.card-hero {
+  text-align: center;
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+}
+
