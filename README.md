@@ -1,6 +1,6 @@
-# FitAGI by Capy
-
 **English** | [简体中文](README.zh-CN.md)
+
+# FitAGI by Capy
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.9.0-informational.svg)](CHANGELOG.md)
@@ -252,10 +252,11 @@ Building from source, running the app in a browser, the npm scripts and the test
 **Settings**
 - Language: **Auto** (follow the device) or Simplified Chinese / English / Español,
   applied instantly with no reload. Date and time formatting follows the chosen language
-- Theme: three shipped themes — **bunny** (pink and blue), **panda** (monochrome) and
-  **orca** — each with its own palette and 16×16 pixel mascot, shown as a swatch and a
-  mascot in the picker. On Android the status bar follows the theme, with its icon colour
-  derived from the bar colour rather than hardcoded per theme
+- Theme: four shipped themes — **ragdoll** (the app's own cat, warm off-white and pink),
+  **bunny** (pink and blue), **panda** (black and white) and **orca** (deep ocean blue) — each
+  with its own palette and 16×16 pixel mascot, shown as a swatch and a mascot in the picker
+  and defaulting to `ragdoll`. On Android the status bar follows the theme, with its icon
+  colour derived from the bar colour rather than hardcoded per theme
 - Default unit (kg / lb)
 - Storage engine shown for transparency
 - AI: enable, base URL, key, model, default role, and the detected vision capability with
@@ -349,7 +350,7 @@ There are no fixed pixel widths for content, and nothing needs a particular scre
 ### Corners
 
 The interface is built from rounded objects rather than rectangles with clipped corners, and the
-whole thing reads from five radius tokens in `:root`:
+whole thing reads from six radius tokens in `:root`:
 
 | Token | Used by |
 | --- | --- |
@@ -380,12 +381,12 @@ distance, rest, RPE, RIR, and failure/warmup/drop-set flags. Meals are a separat
 src/
   domain/        types, units, dates, metrics, workout factories  (no I/O)
   storage/       StorageAdapter + IndexedDB / SQLite implementations
-  repositories/  training, exercise, rule, settings, summary, profile, meal
+  repositories/  training, exercise, rule, settings, summary, profile, meal, plan, reminder
   services/      backup/restore, file transfer, Markdown/CSV export, outlier detection,
                  image picking and compression
     ai/          provider interface, OpenAI-compatible client, prompts, context builder,
-                 offline parser, draft materializer, vision detection, meal analysis,
-                 user context
+                 offline parser, reminder and plan proposals, draft materializer,
+                 vision detection, meal analysis, user context
     summaries/   pure summary builders + the service that persists them + AI polish
   state/         app-wide preferences, language and profile, active workout session,
                  shared outlier review
@@ -395,7 +396,7 @@ src/
   components/    sheet, fields, exercise card, exercise picker, rule forms, outlier sheet,
                  progress chart, pixel-art renderer, error boundary
   pages/         Home, Workout, Meals, Meal detail, Profile, QuickLog, History, detail,
-                 Exercise, Summaries, Rules, Data, AI, Settings
+                 Exercise, Summaries, Rules, Data, AI, Settings, Plans, Reminders, Welcome
   dev/           opt-in browser smoke test (stripped from production builds)
   test/          node:test suites, in-memory + fake-plugin storage doubles
 android/         Capacitor Android project (generated, committed)
