@@ -1,0 +1,39 @@
+name: verify
+
+# Lint, type-check, unit tests and a production build on every push and pull request.
+# The browser smoke test is not run here: it drives headless Chrome through
+# `scripts/smoke.ps1`, which is a Windows PowerShell script, so it stays a local check
+# (see the README).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # 24 for two reasons: the unit tests rely on `--experimental-transform-types`
+          # (22.6+), and the CDP driver uses the global WebSocket (22+).
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
