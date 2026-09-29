@@ -88,6 +88,12 @@ export interface NormalizationSuggestion {
 
 export type AiRole = 'recorder' | 'reminder' | 'coach';
 
+/** A prior user/assistant exchange used only to keep follow-up questions coherent. */
+export interface ConversationTurn {
+  question: string;
+  answer: string;
+}
+
 export interface LlmProvider {
   /** True when a base URL and model are configured. */
   isConfigured(): boolean;

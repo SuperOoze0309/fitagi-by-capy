@@ -94,8 +94,8 @@ MealItem
 
 | 适配器 | 使用场景 | 说明 |
 | --- | --- | --- |
-| `IndexedDbAdapter` | 浏览器开发 + 兜底 | `DB_VERSION = 3`。集合 `workouts`、`rules`、`summaries`、`meals`、`reminders`、`plans`；键值存储 `settings`、`presets`、`images`、`profile`。 |
-| `SqliteAdapter` | Android（生产） | `@capacitor-community/sqlite`，`SCHEMA_VERSION = 3`。表 `workouts`、`alias_rules`、`summaries`、`meals`、`reminders`、`plans`、`settings`、`presets`、`profile`、`images`、`meta`。 |
+| `IndexedDbAdapter` | 浏览器开发 + 兜底 | `DB_VERSION = 4`。集合 `workouts`、`rules`、`summaries`、`meals`、`reminders`、`plans`；键值存储 `settings`、`presets`、`images`、`profile`、`aiChat`。 |
+| `SqliteAdapter` | Android（生产） | `@capacitor-community/sqlite`，`SCHEMA_VERSION = 4`。表 `workouts`、`alias_rules`、`summaries`、`meals`、`reminders`、`plans`、`settings`、`presets`、`profile`、`images`、`ai_chat`、`meta`。 |
 
 存储区名称只在 `src/storage/adapter.ts` 的 `CollectionName` 与 `KeyValueName` 联合类型里枚举一次，因此不可能只为某一个后端新增集合。SQLite schema 还会建一张 `meta` 表，适配器从不读写它；它是预留的，不属于应用的契约。
 
@@ -109,6 +109,7 @@ MealItem
 | `meals` | 一条饮食记录一个文档 | 与训练记录相同的本地优先契约。 |
 | `images` | 每张饮食照片一个压缩后的 data URL | 照片自占一行，因此写入新照片永远不会重写其他照片，删除饮食记录也会删除它的图片。 |
 | `profile` | 可选的用户资料 | 从不是必需，也从不会阻塞。 |
+| `aiChat` | 最近最多 100 轮 AI 对话 | 本机保存以支持跨页面和重启后的追问；独立于训练记录，且不进入备份。 |
 | `settings` / `presets` | 偏好设置，以及冒烟测试的运行状态 | `presets` 与用户数据一样能在刷新后存活。 |
 | `reminders` | 提醒文档 | 应用拥有列表，操作系统拥有排期，两者会各自漂移，因此必须能从存储整体重建。 |
 | `plans` | 训练计划文档 | 计划是「意图」，与训练历史完全分离。 |
@@ -249,7 +250,7 @@ BackupDocument {
 应用已经有带着数据的安装实例，因此新增字段绝不能弄坏其中任何一个。三层机制负责这件事，每一层都由 `src/test/migration.test.ts` 覆盖：
 
 - **文档。** `normalizeSettings()` 与 `normalizeProfile()` 显式解析每个字段，而不是盲目合并：未知的主题、语言、单位、角色、性别、目标或活动水平都会回退——回退到默认值，或者对天生可选的资料枚举回退到 `null`——不合理的数值（0 kg 体重、400 岁年龄）会变成 `null`，而不是一个会悄悄污染每次 AI 请求的数字；主题出现之前那个已废弃的 `colorScheme` 值则直接丢弃，改用默认主题。`SettingsRepository.ensureInitialized()` 会把规范化后的文档写回去，因此迁移是完成的，而不是每次读取都重新推导一遍。
-- **存储。** IndexedDB 以 `DB_VERSION = 3` 打开，SQLite 以 `SCHEMA_VERSION = 3` 打开。两次升级都是增量的：`onupgradeneeded` 只创建缺失的对象存储，SQLite schema 是一串 `CREATE TABLE IF NOT EXISTS`。因此一个 1 级数据库会保留它原有的每一行——测试会手工构造这样一个数据库（以及一个 2 级数据库），保存一条训练记录，再通过应用打开它，断言那条记录仍在，并且新的存储区可用。
+- **存储。** IndexedDB 以 `DB_VERSION = 4` 打开，SQLite 以 `SCHEMA_VERSION = 4` 打开。两次升级都是增量的：`onupgradeneeded` 只创建缺失的对象存储，SQLite schema 是一串 `CREATE TABLE IF NOT EXISTS`。因此一个 1 级数据库会保留它原有的每一行——测试会手工构造这样一个数据库（以及一个 2 级数据库），保存一条训练记录，再通过应用打开它，断言那条记录仍在，并且新的存储区可用。`meals` 是 v2 来的，`reminders` 和 `plans` 是 v3，`aiChat` 是 v4；`src/test/aiConversation.test.ts` 用同样的方式走了一遍 v3 → v4，并在之后再开一次连接，断言存下的对话仍然读得出来。
 - **备份。** 一个格式版本 1 的备份没有 `meals`，也没有 `profile`，并且可能带有 `theme: 'dark'`。它仍然能导入：缺失的数组变成空数组，profile 变成 `null`，已废弃的主题值回退到默认主题，训练记录原样恢复。
 
 迁移永远不会删除训练历史；升级路径中没有任何东西会发出 `DELETE` 或 `clear()`。
@@ -327,7 +328,8 @@ BackupDocument {
 | `vision.ts` | 模型能力检测：根据模型名家族得出 `supported` / `unsupported` / `unknown`，外加用户覆盖、`image_url` content part 与 `looksLikeVisionRejection()`。 |
 | `mealAnalysis.ts` | 照片 → 可编辑的饮食提议（`analyseMealPhoto`、`parseAnalysis`、`extractJson`）以及更正循环（`reviseMeal`），并把 `VisionNotSupportedError` / `VisionRejectedError` 作为不同的结果。 |
 | `userContext.ts` | 资料 → 简短的模型上下文块（`buildUserContext`、`buildProfileBlock`、`resolveMetrics`、`resolveAge`、`parsePlainDate`）。 |
-| `index.ts` | `AiService` 门面：设置 → provider，并且是唯一决定何时涉及 AI 的地方。还暴露 `visionCapability`、`analyseMeal`、`reviseMeal` 与 `userContext`。 |
+| `index.ts` | `AiService` 门面：设置 → provider，并且是唯一决定何时涉及 AI 的地方。还暴露 `visionCapability`、`analyseMeal`、`reviseMeal` 与 `userContext`。聊天会携带最多 8 轮先前问答，并限制上下文字符数。 |
+| `src/repositories/aiConversationRepository.ts` | 在 `aiChat` 本地键值区保存、读取和清除最近 100 轮聊天记录。 |
 
 ### 视觉能力
 
@@ -364,6 +366,8 @@ BackupDocument {
 5. 每月汇总，仅在问题涉及更长趋势时使用
 
 上下文渲染为紧凑的纯文本，而不是原始 JSON：token 少得多、模型更容易读，也让隐私审查变得轻而易举。`TrainingContext.sections` 记录包含了哪些内容，AI 页会在每个回答下面展示它。
+
+AI 页面会在发问时读取本地进行中的训练并传入其 ID，因此当前训练确实会加入上下文。聊天记录单独保存在 `aiChat`，重新打开页面后仍可查看；新请求至多携带最近 8 轮问答，并受 16,000 字符上限约束。历史回答只帮助解析追问，不作为训练事实来源。每条回答的上下文披露会包含这些前文；聊天记录不进入备份。
 
 ### 角色
 
@@ -504,7 +508,7 @@ JSON（`services/backup.ts`）是用于**恢复**的格式。`services/export/` 
 
 | 命令 | 覆盖内容 |
 | --- | --- |
-| `npm test` | `src/**/*.test.ts` 中的 271 个测试、53 个套件：仓储、单位与格式化、指标、别名规则、动作历史与个人最佳、异常值检测与更正路径、总结构建器 / 服务 / 补算 / 润色、Markdown 与 CSV 导出、备份/恢复与 v1 兼容、迁移、设置写入的串行化、**提醒排期算术与计划规范化**、**AI 提议解析**、**流式分块读取**、离线解析器、上下文构建器、针对 mock `fetch` 的 OpenAI 客户端、主题 tokens、状态栏图标选择、像素精灵、**母题与场景组合**、三种语言的目录齐备性**与完整度**、视觉能力检测、饮食分析与资料上下文，通过 `fake-indexeddb` 测试的**真实** `IndexedDbAdapter`，以及通过伪造的 Capacitor 插件测试的 `SqliteAdapter` 真实 SQL。 |
+| `npm test` | `src/**/*.test.ts` 中的 283 个测试、55 个套件：仓储、单位与格式化、指标、别名规则、动作历史与个人最佳、异常值检测与更正路径、总结构建器 / 服务 / 补算 / 润色、Markdown 与 CSV 导出、备份/恢复与 v1 兼容、迁移、设置写入的串行化、**提醒排期算术与计划规范化**、**AI 提议解析**、**流式分块读取**、**本机聊天记录与前文记忆的上限**、离线解析器、上下文构建器、针对 mock `fetch` 的 OpenAI 客户端、主题 tokens、状态栏图标选择、像素精灵、**母题与场景组合**、三种语言的目录齐备性**与完整度**、视觉能力检测、饮食分析与资料上下文，通过 `fake-indexeddb` 测试的**真实** `IndexedDbAdapter`，以及通过伪造的 Capacitor 插件测试的 `SqliteAdapter` 真实 SQL。 |
 | `npm run test:browser` | `scripts/smoke.ps1` 启动一个一次性的 Vite 服务器，并通过 CDP 驱动无头 Chrome（或 Edge）跑过带 `?smoke=1` 的真实应用，跑两遍：手机视口（390×844）与桌面视口（1280×900），各自使用独立的浏览器配置目录，因此两次运行不会互相影响。`src/dev/browserSmoke.ts` 里的页内套件会跨两次页面重载记录并完成一次训练，走一遍动作历史（图表指标切换、PR 徽章）、规则、备份往返、Markdown/CSV 导出、浏览器下载路径、Quick Log 预览 + 确认、AI 关闭时的 AI 页、总结、异常值复核、手工录入/编辑/删除饮食、视觉能力特有的拒绝、双向语言切换、主题切换以及响应式布局——然后通过真实的错误边界让一个组件崩溃，并断言 React 没有向控制台输出任何错误。每项检查都必须在两个视口下通过。 |
 | `npm run verify` | lint + typecheck + tests + 生产构建。 |
 

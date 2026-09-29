@@ -10,6 +10,7 @@ import {
   messageText,
   type AiRole,
   type ChatMessage,
+  type ConversationTurn,
   type LlmProvider,
   type NormalizationSuggestion,
   type ParsedWorkoutDraft,
@@ -162,7 +163,7 @@ export class AiService {
   async ask(
     question: string,
     role: AiRole,
-    options: { workoutId?: string; exerciseNames?: string[] } = {},
+    options: { workoutId?: string; exerciseNames?: string[]; history?: ConversationTurn[] } = {},
   ): Promise<{ answer: string; context: TrainingContext }> {
     if (!this.provider.isConfigured()) throw new LlmNotConfiguredError();
 
@@ -181,8 +182,11 @@ export class AiService {
     };
 
     const context = await this.contextBuilder.build(request);
+    const memory = conversationMessages(options.history ?? []);
+    addConversationDisclosure(context, memory);
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPromptFor(role) },
+      ...memory.messages,
       { role: 'user', content: context.text },
     ];
 
@@ -201,7 +205,12 @@ export class AiService {
     question: string,
     role: AiRole,
     onDelta: (delta: string, full: string) => void,
-    options: { workoutId?: string; exerciseNames?: string[]; signal?: AbortSignal } = {},
+    options: {
+      workoutId?: string;
+      exerciseNames?: string[];
+      history?: ConversationTurn[];
+      signal?: AbortSignal;
+    } = {},
   ): Promise<{ answer: string; context: TrainingContext }> {
     if (!this.provider.isConfigured()) throw new LlmNotConfiguredError();
 
@@ -219,8 +228,11 @@ export class AiService {
     };
 
     const context = await this.contextBuilder.build(request);
+    const memory = conversationMessages(options.history ?? []);
+    addConversationDisclosure(context, memory);
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPromptFor(role) },
+      ...memory.messages,
       { role: 'user', content: context.text },
     ];
 
@@ -362,4 +374,60 @@ export function resetAiServiceForTests(): void {
 /** True when the text is worth sending to a parser at all. */
 export function canParse(text: string): boolean {
   return text.trim().length >= 2;
+}
+
+interface ConversationMemory {
+  messages: ChatMessage[];
+  exchanges: number;
+  characters: number;
+}
+
+const MAX_MEMORY_EXCHANGES = 8;
+const MAX_MEMORY_CHARACTERS = 16_000;
+
+/**
+ * Keep recent turns in chronological order and cap their size before each request.
+ * This gives the model follow-up context without sending an unbounded transcript.
+ *
+ * Exported as a test seam: the trimming rules are the only thing standing between a
+ * long conversation and an oversized request, so they are asserted directly.
+ */
+export function conversationMessages(history: ConversationTurn[]): ConversationMemory {
+  const valid = history
+    .filter((turn) => turn.question.trim() !== '' && turn.answer.trim() !== '')
+    .slice(-MAX_MEMORY_EXCHANGES);
+  const selected: ChatMessage[] = [];
+  let exchanges = 0;
+  let characters = 0;
+
+  for (let index = valid.length - 1; index >= 0; index -= 1) {
+    const turn = valid[index]!;
+    const question = trimMemoryText(turn.question, 1_200);
+    const answer = trimMemoryText(turn.answer, 2_400);
+    const size = question.length + answer.length;
+    if (characters + size > MAX_MEMORY_CHARACTERS) break;
+    selected.unshift(
+      { role: 'user', content: question },
+      { role: 'assistant', content: answer },
+    );
+    characters += size;
+    exchanges += 1;
+  }
+
+  return { messages: selected, exchanges, characters };
+}
+
+function trimMemoryText(value: string, limit: number): string {
+  if (value.length <= limit) return value;
+  const marker = '\n[… earlier text trimmed …]\n';
+  const remaining = limit - marker.length;
+  const head = Math.ceil(remaining / 2);
+  const tail = remaining - head;
+  return value.slice(0, head) + marker + value.slice(-tail);
+}
+
+function addConversationDisclosure(context: TrainingContext, memory: ConversationMemory): void {
+  if (memory.exchanges === 0) return;
+  context.sections.push('previous conversation (' + memory.exchanges + ' exchanges)');
+  context.characters += memory.characters;
 }

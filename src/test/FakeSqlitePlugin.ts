@@ -20,7 +20,7 @@ interface Table {
   order: string[];
 }
 
-const DEFAULT_TABLES = ['workouts', 'alias_rules', 'summaries', 'settings', 'presets'];
+const DEFAULT_TABLES = ['workouts', 'alias_rules', 'summaries', 'settings', 'presets', 'ai_chat'];
 
 export class FakeSqlitePlugin {
   /** Set to true to make the first call fail, simulating a missing native module. */

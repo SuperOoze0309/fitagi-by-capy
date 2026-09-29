@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.9.0-informational.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Android%206.0%2B-3ddc84.svg)](#supported-devices)
-[![Tests](https://img.shields.io/badge/tests-271%20passing-brightgreen.svg)](docs/DEVELOPING.md#verify)
+[![Tests](https://img.shields.io/badge/tests-283%20passing-brightgreen.svg)](docs/DEVELOPING.md#verify)
 
 A free, open-source, local-first workout and meal tracker for Android. The mascot is a ragdoll cat,
 drawn in code rather than shipped as an image.
@@ -215,9 +215,13 @@ Building from source, running the app in a browser, the npm scripts and the test
 - Endpoints that ignore the streaming flag still work: the whole answer appears at once
   instead of failing
 - Discovered exercise names are offered with a per-session name
+- **Chat memory stays on-device**: the latest 100 exchanges remain visible after leaving and
+  reopening the AI page. Follow-ups include up to 8 earlier exchanges so the model can keep
+  track of what you were discussing. Each answer shows what was sent; Clear also removes the
+  local transcript. Chat history is not included in backups.
 - A **Summarise recent training** action asks for a recap of the built context, with no
   question needed
-- A **Context Builder** decides what is sent: the in-progress workout, the last 3–5
+- A **Context Builder** decides what is sent: the current in-progress workout, the last 3–5
   sessions of the exercises you asked about, the last 7 days, and the weekly/monthly
   rollups — never the whole database. Each answer shows what was sent.
 - With AI off the AI page explains how to enable it and points at the offline Quick Log
@@ -468,11 +472,13 @@ against, and progress photos. None of them need architectural change.
 
 All data lives on this device. There is no project server, no account and no telemetry. The only
 network requests the app can ever make go to the OpenAI-compatible endpoint *you* configure, and only
-when you explicitly trigger an AI action. Each AI answer shows which context sections were sent, and
-a meal photo is only ever sent inside the analysis request you started — it is never uploaded
-anywhere else, and it stays in the app's own storage. The profile is local-only and reaches a model
-only as the short context block attached to a meal request. Backups never contain your API key and
-never contain meal photos.
+when you explicitly trigger an AI action. Chat history stays on-device; each question sends up to 8
+earlier exchanges and the training context shown under the answer to the selected endpoint. Chat
+history is not included in backups. Each AI answer shows which context sections were sent, and a meal
+photo is only ever sent inside the analysis request you started — it is never uploaded anywhere else,
+and it stays in the app's own storage. The profile is local-only and reaches a model only as the short
+context block attached to a meal request. Backups never contain your API key and never contain meal
+photos.
 
 ## Documentation
 
@@ -495,7 +501,7 @@ The two rules that matter most:
    by an older version still imports. The frozen identifiers listed above exist for that reason — do
    not rename them.
 
-Run `npm run verify` before opening a pull request: lint, typecheck, 271 unit tests and a production
+Run `npm run verify` before opening a pull request: lint, typecheck, 283 unit tests and a production
 build. [`docs/DEVELOPING.md`](docs/DEVELOPING.md) has the rest, including the browser suite that drives
 the real app in headless Chrome at two viewports.
 

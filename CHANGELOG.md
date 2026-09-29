@@ -9,6 +9,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and the proj
 
 ---
 
+## [Unreleased]
+
+### Added / 新增
+
+- **On-device AI chat memory.** The latest 100 exchanges persist locally; follow-up requests
+  include up to 8 recent exchanges and disclose that context. The AI page now also includes
+  the active workout in its training context.
+  **本机聊天记忆。** 最近 100 轮对话保存在本机；追问最多携带最近 8 轮，并显示实际发送的前文。
+  AI 页面也会把进行中的训练加入训练上下文。
+
 ## [0.9.0] — 2026-09-25
 
 ### Added / 新增

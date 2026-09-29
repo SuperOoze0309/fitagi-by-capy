@@ -42,3 +42,4 @@ design/theme-art/preview.html
 npm-debug.log*
 .env
 .env.*
+.commit-msg.tmp

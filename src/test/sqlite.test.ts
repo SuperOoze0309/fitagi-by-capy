@@ -163,6 +163,40 @@ describe('SQLite adapter', () => {
     await bundle.adapter.close();
   });
 
+  it('stores the AI conversation in its own table and reads it back after a reopen', async () => {
+    const { bundle, repos } = await open();
+
+    await repos.aiConversation.save([
+      {
+        id: 'turn-1',
+        role: 'coach',
+        question: 'How is my bench going?',
+        answer: 'Up 5 kg since March.',
+        contextSections: ['recent workouts'],
+        contextCharacters: 900,
+        createdAt: '2026-03-01T10:00:00.000Z',
+      },
+    ]);
+
+    assert.equal(fake.rawRows('ai_chat').length, 1, 'the v4 table exists and holds the row');
+
+    // The Android path has to survive the same restart the browser path does.
+    await bundle.adapter.close();
+    resetStorageForTests();
+    const second = await open();
+
+    const recent = await second.repos.aiConversation.recent();
+    assert.equal(recent.length, 1, 'chat read back from SQLite');
+    assert.equal(recent[0]?.question, 'How is my bench going?');
+    assert.deepEqual(recent[0]?.contextSections, ['recent workouts']);
+
+    await second.repos.aiConversation.clear();
+    assert.deepEqual(await second.repos.aiConversation.recent(), []);
+    assert.deepEqual(fake.rawRows('ai_chat'), [], 'Clear removes the row, not just the cache');
+
+    await second.bundle.adapter.close();
+  });
+
   it('supports count, removal and clearing', async () => {
     const { bundle, repos } = await open();
     const training = repos.training;

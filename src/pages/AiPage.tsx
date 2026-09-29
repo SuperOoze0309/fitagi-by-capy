@@ -2,21 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, Segmented } from '../components/ui';
 import type { MessageKey } from '../i18n';
-import type { AiRole } from '../services/ai';
+import type { AiRole, ConversationTurn } from '../services/ai';
 import { aiService } from '../services/ai';
+import { newId } from '../domain/ids';
+import type { AiConversationEntry } from '../repositories/aiConversationRepository';
+import { repositories } from '../repositories';
 import { useApp, useI18n } from '../state/AppContext';
 import { useToast } from '../state/ToastContext';
 
-interface Exchange {
-  id: string;
-  role: AiRole;
-  question: string;
-  answer: string;
-  /** What was actually sent, so the user can audit it. */
-  contextSections: string[];
-  contextCharacters: number;
+interface Exchange extends AiConversationEntry {
   /** True while the answer is still arriving, so the UI can show a caret. */
   streaming?: boolean;
+  /** Failed requests stay visible in this session but are not saved as memory. */
+  failed?: boolean;
 }
 
 const ROLE_KEYS: Record<AiRole, MessageKey> = {
@@ -63,13 +61,36 @@ export function AiPage() {
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
+  const [historyReady, setHistoryReady] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
-  const counter = useRef(0);
+  const exchangesRef = useRef<Exchange[]>([]);
+  const replaceExchanges = useCallback((next: Exchange[]) => {
+    exchangesRef.current = next;
+    setExchanges(next);
+  }, []);
 
   const threadRef = useRef<HTMLDivElement>(null);
   /** Whether the thread is scrolled to the bottom, so streaming can follow it. */
   const stickRef = useRef(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void repositories()
+      .aiConversation.recent()
+      .then((saved) => {
+        if (!cancelled) replaceExchanges(saved);
+      })
+      .catch(() => {
+        if (!cancelled) toast.show(t('ai.memoryLoadFailed'), 'error');
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [replaceExchanges, t, toast]);
 
   const roleOptions: { value: AiRole; label: string }[] = [
     { value: 'recorder', label: t('ai.roleRecorder') },
@@ -106,14 +127,13 @@ export function AiPage() {
    */
   const ask = useCallback(async () => {
     const trimmed = question.trim();
-    if (trimmed === '' || busy) return;
+    if (trimmed === '' || busy || !historyReady) return;
     setBusy(true);
     setQuestion('');
     stickRef.current = true;
 
-    counter.current += 1;
-    const id = `x${counter.current}`;
-    setExchanges((current) => [
+    const id = newId('chat');
+    replaceExchanges([
       {
         id,
         role,
@@ -121,36 +141,49 @@ export function AiPage() {
         answer: '',
         contextSections: [],
         contextCharacters: 0,
+        createdAt: new Date().toISOString(),
         streaming: true,
       },
-      ...current,
+      ...exchangesRef.current,
     ]);
 
     try {
-      const { answer, context } = await ai.askStreaming(trimmed, role, (_delta, full) => {
-        setExchanges((current) =>
-          current.map((exchange) => (exchange.id === id ? { ...exchange, answer: full } : exchange)),
-        );
-      });
-      setExchanges((current) =>
-        current.map((exchange) =>
-          exchange.id === id
-            ? {
-                ...exchange,
-                answer,
-                streaming: false,
-                contextSections: context.sections,
-                contextCharacters: context.characters,
-              }
-            : exchange,
-        ),
+      const currentWorkout = await repositories().training.inProgress();
+      const history = toConversationHistory(exchangesRef.current);
+      const { answer, context } = await ai.askStreaming(
+        trimmed,
+        role,
+        (_delta, full) => {
+          replaceExchanges(
+            exchangesRef.current.map((exchange) =>
+              exchange.id === id ? { ...exchange, answer: full } : exchange,
+            ),
+          );
+        },
+        {
+          ...(currentWorkout ? { workoutId: currentWorkout.id } : {}),
+          history,
+        },
       );
+      const next = exchangesRef.current.map((exchange) =>
+        exchange.id === id
+          ? {
+              ...exchange,
+              answer,
+              streaming: false,
+              contextSections: context.sections,
+              contextCharacters: context.characters,
+            }
+          : exchange,
+      );
+      replaceExchanges(next);
+      await saveConversation(next, toast, t);
     } catch (error) {
       const message = error instanceof Error ? error.message : t('ai.requestFailed');
-      setExchanges((current) =>
-        current.map((exchange) =>
+      replaceExchanges(
+        exchangesRef.current.map((exchange) =>
           exchange.id === id
-            ? { ...exchange, answer: message, streaming: false }
+            ? { ...exchange, answer: message, streaming: false, failed: true }
             : exchange,
         ),
       );
@@ -159,7 +192,7 @@ export function AiPage() {
       setBusy(false);
       inputRef.current?.focus();
     }
-  }, [ai, busy, question, role, t, toast]);
+  }, [ai, busy, historyReady, question, replaceExchanges, role, t, toast]);
 
   /**
    * Summarise the assembled context, without a question.
@@ -169,13 +202,12 @@ export function AiPage() {
    * giving advice, and it shows exactly the same disclosure as a question does.
    */
   const summarize = useCallback(async () => {
-    if (busy) return;
+    if (busy || !historyReady) return;
     setBusy(true);
     stickRef.current = true;
 
-    counter.current += 1;
-    const id = `x${counter.current}`;
-    setExchanges((current) => [
+    const id = newId('chat');
+    replaceExchanges([
       {
         id,
         role: 'recorder',
@@ -183,44 +215,60 @@ export function AiPage() {
         answer: '',
         contextSections: [],
         contextCharacters: 0,
+        createdAt: new Date().toISOString(),
         streaming: true,
       },
-      ...current,
+      ...exchangesRef.current,
     ]);
 
     try {
-      const context = await ai.buildContext({ includeWeekly: true });
+      const currentWorkout = await repositories().training.inProgress();
+      const context = await ai.buildContext({
+        includeWeekly: true,
+        ...(currentWorkout ? { workoutId: currentWorkout.id } : {}),
+      });
       if (context.text.trim() === '') {
-        setExchanges((current) => current.filter((exchange) => exchange.id !== id));
+        replaceExchanges(exchangesRef.current.filter((exchange) => exchange.id !== id));
         toast.show(t('ai.nothingToSummarise'));
         return;
       }
       const answer = await ai.summarize(context);
-      setExchanges((current) =>
-        current.map((exchange) =>
-          exchange.id === id
-            ? {
-                ...exchange,
-                answer,
-                streaming: false,
-                contextSections: context.sections,
-                contextCharacters: context.characters,
-              }
-            : exchange,
-        ),
+      const next = exchangesRef.current.map((exchange) =>
+        exchange.id === id
+          ? {
+              ...exchange,
+              answer,
+              streaming: false,
+              contextSections: context.sections,
+              contextCharacters: context.characters,
+            }
+          : exchange,
       );
+      replaceExchanges(next);
+      await saveConversation(next, toast, t);
     } catch (error) {
       const message = error instanceof Error ? error.message : t('ai.requestFailed');
-      setExchanges((current) =>
-        current.map((exchange) =>
-          exchange.id === id ? { ...exchange, answer: message, streaming: false } : exchange,
+      replaceExchanges(
+        exchangesRef.current.map((exchange) =>
+          exchange.id === id
+            ? { ...exchange, answer: message, streaming: false, failed: true }
+            : exchange,
         ),
       );
       toast.show(message, 'error');
     } finally {
       setBusy(false);
     }
-  }, [ai, busy, t, toast]);
+  }, [ai, busy, historyReady, replaceExchanges, t, toast]);
+
+  const clearConversation = useCallback(async () => {
+    replaceExchanges([]);
+    try {
+      await repositories().aiConversation.clear();
+    } catch {
+      toast.show(t('ai.memoryClearFailed'), 'error');
+    }
+  }, [replaceExchanges, t, toast]);
 
   if (!ai.isEnabled()) {
     return (
@@ -318,17 +366,16 @@ export function AiPage() {
                 <button
                   type="button"
                   className="btn btn-sm"
-                  disabled={busy}
+                  disabled={busy || !historyReady}
                   onClick={() => void summarize()}
                 >
                   {t('ai.summarise')}
                 </button>
               </div>
-              <div className="banner" style={{ marginTop: 'var(--space-3)' }}>
-                {t('ai.privacy', { target: ai.describeTarget() })}
-              </div>
             </div>
           ) : null}
+
+          <div className="banner small">{t('ai.privacy', { target: ai.describeTarget() })}</div>
 
           <div className="chat-thread chat-scroll" ref={threadRef} onScroll={onThreadScroll}>
             {exchanges.length === 0 ? (
@@ -376,7 +423,8 @@ export function AiPage() {
               <button
                 type="button"
                 className="btn btn-sm btn-ghost"
-                onClick={() => setExchanges([])}
+                disabled={busy || !historyReady}
+                onClick={() => void clearConversation()}
               >
                 {t('common.clear')}
               </button>
@@ -405,7 +453,7 @@ export function AiPage() {
                 id="ai-question"
                 ref={inputRef}
                 className="textarea chat-input"
-                placeholder={t('ai.askPlaceholder')}
+                placeholder={historyReady ? t('ai.askPlaceholder') : t('common.loading')}
                 value={question}
                 rows={1}
                 onChange={(event) => setQuestion(event.target.value)}
@@ -419,7 +467,7 @@ export function AiPage() {
               <button
                 type="button"
                 className="btn btn-primary chat-send"
-                disabled={busy || question.trim() === ''}
+                disabled={busy || !historyReady || question.trim() === ''}
                 aria-label={t('ai.ask', { role: t(ROLE_KEYS[role]) })}
                 onClick={() => void ask()}
               >
@@ -431,4 +479,35 @@ export function AiPage() {
       </main>
     </>
   );
+}
+
+function toConversationHistory(exchanges: Exchange[]): ConversationTurn[] {
+  return exchanges
+    .filter((exchange) => !exchange.streaming && !exchange.failed && exchange.answer.trim() !== '')
+    .slice(0, 8)
+    .reverse()
+    .map(({ question, answer }) => ({ question, answer }));
+}
+
+async function saveConversation(
+  exchanges: Exchange[],
+  toast: ReturnType<typeof useToast>,
+  t: ReturnType<typeof useI18n>['t'],
+): Promise<void> {
+  const entries: AiConversationEntry[] = exchanges
+    .filter((exchange) => !exchange.streaming && !exchange.failed && exchange.answer.trim() !== '')
+    .map((exchange) => ({
+      id: exchange.id,
+      role: exchange.role,
+      question: exchange.question,
+      answer: exchange.answer,
+      contextSections: exchange.contextSections,
+      contextCharacters: exchange.contextCharacters,
+      createdAt: exchange.createdAt,
+    }));
+  try {
+    await repositories().aiConversation.save(entries);
+  } catch {
+    toast.show(t('ai.memorySaveFailed'), 'error');
+  }
 }

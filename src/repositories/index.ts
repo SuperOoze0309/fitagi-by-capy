@@ -4,6 +4,7 @@ import { RuleRepository } from './ruleRepository';
 import { ProfileRepository, SettingsRepository, SummaryRepository } from './settingsRepository';
 import { MealRepository } from './mealRepository';
 import { PlanRepository, ReminderRepository } from './planRepository';
+import { AiConversationRepository } from './aiConversationRepository';
 import { getStorage, type StorageBundle } from '../storage';
 
 /**
@@ -23,6 +24,7 @@ export interface Repositories {
   meals: MealRepository;
   reminders: ReminderRepository;
   plans: PlanRepository;
+  aiConversation: AiConversationRepository;
 }
 
 let instance: Repositories | null = null;
@@ -47,6 +49,7 @@ export function buildRepositories(storage: StorageBundle): Repositories {
     meals: new MealRepository(storage.meals, storage.images),
     reminders: new ReminderRepository(storage.reminders),
     plans: new PlanRepository(storage.plans),
+    aiConversation: new AiConversationRepository(storage.scope.kv('aiChat')),
   };
 }
 

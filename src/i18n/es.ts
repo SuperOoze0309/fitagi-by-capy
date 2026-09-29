@@ -333,6 +333,9 @@ export const es: Messages = {
       'Introduce cualquier URL base compatible con OpenAI, por ejemplo {openai}, {deepseek} o un Ollama local en {ollama}.',
     step3: 'Introduce el nombre del modelo y, si el servicio lo requiere, una clave de API.',
     keyStaysLocal: 'La clave se guarda solo en este dispositivo y nunca se incluye en una copia de seguridad.',
+    memoryLoadFailed: 'No se pudo cargar la conversación guardada',
+    memorySaveFailed: 'No se pudo guardar la conversación en este dispositivo',
+    memoryClearFailed: 'No se pudo borrar la conversación guardada',
     worksWithoutAi: 'Funciona sin IA',
     openQuickLog: 'Abrir',
     openSettings: 'Abrir ajustes',
@@ -344,7 +347,7 @@ export const es: Messages = {
     summariseBody: 'Envía el contexto ya construido una vez y pide un resumen breve. Sin consejos.',
     summarise: 'Resumir',
     privacy:
-      'Solo se envía a {target} el contexto que aparece bajo cada respuesta. La app no tiene servidor propio y no envía nada más.',
+      'El historial del chat se guarda en este dispositivo y no se incluye en las copias de seguridad. Cada petición envía hasta 8 intercambios anteriores y el contexto del entrenamiento que aparece bajo la respuesta a {target}. La app no tiene servidor propio.',
     conversation: 'Conversación',
     youAsked: 'preguntaste',
     sentToModel: 'Enviado al modelo · {count} caracteres',

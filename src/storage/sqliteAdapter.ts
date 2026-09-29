@@ -10,11 +10,11 @@ import type {
 
 const DB_NAME = 'fitness_agent';
 /**
- * Bumped to 3 for the reminders and plans tables.
+ * Bumped to 4 for the local AI conversation table.
  * The schema is a list of `CREATE TABLE IF NOT EXISTS`, so upgrading an existing
  * database adds only what is missing and leaves every existing row untouched.
  */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 /**
  * SQLite adapter — the Android production store.
@@ -151,6 +151,10 @@ CREATE TABLE IF NOT EXISTS images (
   id TEXT PRIMARY KEY NOT NULL,
   value TEXT
 );
+CREATE TABLE IF NOT EXISTS ai_chat (
+  id TEXT PRIMARY KEY NOT NULL,
+  value TEXT
+);
 CREATE TABLE IF NOT EXISTS meta (
   id TEXT PRIMARY KEY NOT NULL,
   value TEXT
@@ -179,6 +183,7 @@ const KEY_VALUE_TABLES: Record<KeyValueName, string> = {
   presets: 'presets',
   profile: 'profile',
   images: 'images',
+  aiChat: 'ai_chat',
 };
 
 let pluginPromise: Promise<CapacitorSQLitePlugin> | null = null;

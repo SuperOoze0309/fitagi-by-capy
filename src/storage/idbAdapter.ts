@@ -9,13 +9,13 @@ import type {
 
 const DB_NAME = 'fitness-agent';
 /**
- * Bumped to 3 to add the `reminders` and `plans` collections.
+ * Bumped to 4 to add the local AI conversation store.
  *
  * `onupgradeneeded` creates whatever is missing, so an existing database keeps all
  * of its object stores and only gains the new ones — no version bump has ever
  * dropped a row, and none may.
  */
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const COLLECTIONS: CollectionName[] = [
   'workouts',
@@ -25,7 +25,7 @@ const COLLECTIONS: CollectionName[] = [
   'reminders',
   'plans',
 ];
-const KEY_VALUE_STORES: KeyValueName[] = ['settings', 'presets', 'images', 'profile'];
+const KEY_VALUE_STORES: KeyValueName[] = ['settings', 'presets', 'images', 'profile', 'aiChat'];
 
 /**
  * IndexedDB adapter — used when running in a browser (`npm run dev`) and as the

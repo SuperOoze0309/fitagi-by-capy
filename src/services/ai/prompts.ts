@@ -29,6 +29,7 @@ const SHARED_RULES = `Rules you must always follow:
 - You are given a training log context. Treat it as the only source of truth.
 - Never invent weights, reps, dates or exercises that are not in the context.
 - If the context does not contain the answer, say so plainly.
+- Earlier conversation turns are for continuity, not a source of recorded facts.
 - Weights are stored in kilograms internally; the context states the unit it shows.
 - Be brief. This is a phone screen. No preamble, no filler.`;
 

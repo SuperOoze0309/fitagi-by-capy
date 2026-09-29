@@ -113,8 +113,8 @@ Two implementations:
 
 | Adapter | Used by | Notes |
 | --- | --- | --- |
-| `IndexedDbAdapter` | browser dev + fallback | `DB_VERSION = 3`. Collections `workouts`, `rules`, `summaries`, `meals`, `reminders`, `plans`; key/value stores `settings`, `presets`, `images`, `profile`. |
-| `SqliteAdapter` | Android (production) | `@capacitor-community/sqlite`, `SCHEMA_VERSION = 3`. Tables `workouts`, `alias_rules`, `summaries`, `meals`, `reminders`, `plans`, `settings`, `presets`, `profile`, `images`, `meta`. |
+| `IndexedDbAdapter` | browser dev + fallback | `DB_VERSION = 4`. Collections `workouts`, `rules`, `summaries`, `meals`, `reminders`, `plans`; key/value stores `settings`, `presets`, `images`, `profile`, `aiChat`. |
+| `SqliteAdapter` | Android (production) | `@capacitor-community/sqlite`, `SCHEMA_VERSION = 4`. Tables `workouts`, `alias_rules`, `summaries`, `meals`, `reminders`, `plans`, `settings`, `presets`, `profile`, `images`, `ai_chat`, `meta`. |
 
 The store names are enumerated once, in the `CollectionName` and `KeyValueName` unions in
 `src/storage/adapter.ts`, so a new collection cannot be added for one backend only. The SQLite schema
@@ -133,6 +133,7 @@ Each concern owns its own store:
 | `plans` | Weekly training plans | A plan is a template, not a record: deleting one leaves every workout it produced untouched. |
 | `images` | One compressed data URL per meal photo | A photo is its own row, so writing a new picture never rewrites the others, and deleting the meal deletes its image. |
 | `profile` | The optional user profile | Never required, never blocking. |
+| `aiChat` | The latest 100 AI conversation exchanges | Stored locally so follow-ups survive page changes and restarts; separate from workout records and excluded from backups. |
 | `settings` / `presets` | Preferences, and the smoke test's run state | `presets` survives a reload exactly like user data does. |
 
 Records are stored as JSON documents (`id`, `json`, plus denormalized columns for ordering and
@@ -391,11 +392,13 @@ Three layers handle that, and each is covered by `src/test/migration.test.ts`:
   would quietly corrupt every AI request, and the retired pre-theme `colorScheme` value is simply
   dropped in favour of the default theme. `SettingsRepository.ensureInitialized()` writes the
   normalised document back, so a migration completes instead of being re-derived on every read.
-- **Storage.** IndexedDB opens at `DB_VERSION = 3` and SQLite at `SCHEMA_VERSION = 3`. Both upgrades
+- **Storage.** IndexedDB opens at `DB_VERSION = 4` and SQLite at `SCHEMA_VERSION = 4`. Both upgrades
   are additive: `onupgradeneeded` creates only the object stores that are missing, and the SQLite
   schema is a list of `CREATE TABLE IF NOT EXISTS`. A level-1 database therefore keeps every row it
   had — the test builds one by hand, saves a workout, opens it through the app and asserts the
-  workout is still there and that the new stores work.
+  workout is still there and that the new stores work. `meals` arrived in v2, `reminders` and `plans`
+  in v3, and `aiChat` in v4; `src/test/aiConversation.test.ts` walks the v3 → v4 step in the same
+  way, and then reopens the connection to assert a stored conversation is still readable.
 - **Backups.** A format-version-1 backup has no `meals` and no `profile` and may carry
   `theme: 'dark'`. It still imports: the missing arrays become empty, the profile becomes `null`, the
   retired theme value falls back to the default, and the workouts are restored untouched.
@@ -524,7 +527,8 @@ is in use, and no page has to special-case "AI is disabled".
 | `vision.ts` | Model capability detection: `supported` / `unsupported` / `unknown` from model-name families, plus the user override, the `image_url` content part and `looksLikeVisionRejection()`. |
 | `mealAnalysis.ts` | Photo → editable meal proposal (`analyseMealPhoto`, `parseAnalysis`, `extractJson`) and the correction loop (`reviseMeal`), with `VisionNotSupportedError` / `VisionRejectedError` as distinct outcomes. |
 | `userContext.ts` | The profile → short model context block (`buildUserContext`, `buildProfileBlock`, `resolveMetrics`, `resolveAge`, `parsePlainDate`). |
-| `index.ts` | `AiService` facade: settings → provider, and the only place that decides when AI is involved. Also exposes `visionCapability`, `analyseMeal`, `reviseMeal` and `userContext`. |
+| `index.ts` | `AiService` facade: settings → provider, and the only place that decides when AI is involved. Also exposes `visionCapability`, `analyseMeal`, `reviseMeal` and `userContext`. Chat requests include up to 8 earlier exchanges with a character cap. |
+| `src/repositories/aiConversationRepository.ts` | Saves, loads and clears the latest 100 chat exchanges in the local `aiChat` key/value store. |
 
 ### Vision capability
 
@@ -582,6 +586,13 @@ your log by itself" a structural property rather than a promise.
 Context is rendered as compact plain text, not raw JSON: far fewer tokens, easier for a
 model to read, and it makes a privacy review trivial. `TrainingContext.sections` records
 what was included, and the AI page shows it under every answer.
+
+Before each question, the AI page reads the current in-progress workout and passes its ID
+to the builder, so that workout is included. Chat history is stored locally and remains
+visible after reopening the page. Requests include at most the latest 8 exchanges, capped
+at 16,000 characters. Earlier answers help resolve follow-ups but are not treated as
+recorded training facts. The per-answer disclosure includes the conversation history;
+chat history is excluded from backups.
 
 ### Roles
 
@@ -799,7 +810,7 @@ for the case where a session was finished by mistake — "finished" is a state, 
 
 | Command | What it covers |
 | --- | --- |
-| `npm test` | 271 tests in 53 suites (`src/**/*.test.ts`): repositories, units and formatting, metrics, alias rules, exercise history and personal bests, anomaly detection and the correction path, summary builders / service / catch-up / polish, Markdown and CSV exports, backup/restore and v1 compatibility, migrations, settings-write serialisation, **reminder scheduling arithmetic and plan normalisation**, **AI proposal parsing**, **streamed-chunk reading**, the offline parser, the context builder, the OpenAI client against a mocked `fetch`, theme tokens, status-bar icon selection, the pixel sprites, **motif and scenery composition**, catalogue parity **and completeness** across the three locales, vision capability detection, meal analysis and the profile context, the **real** `IndexedDbAdapter` via `fake-indexeddb`, and the `SqliteAdapter`'s real SQL via a fake Capacitor plugin. |
+| `npm test` | 283 tests in 55 suites (`src/**/*.test.ts`): repositories, units and formatting, metrics, alias rules, exercise history and personal bests, anomaly detection and the correction path, summary builders / service / catch-up / polish, Markdown and CSV exports, backup/restore and v1 compatibility, migrations, settings-write serialisation, **reminder scheduling arithmetic and plan normalisation**, **AI proposal parsing**, **streamed-chunk reading**, **stored AI conversations and their follow-up memory caps**, the offline parser, the context builder, the OpenAI client against a mocked `fetch`, theme tokens, status-bar icon selection, the pixel sprites, **motif and scenery composition**, catalogue parity **and completeness** across the three locales, vision capability detection, meal analysis and the profile context, the **real** `IndexedDbAdapter` via `fake-indexeddb`, and the `SqliteAdapter`'s real SQL via a fake Capacitor plugin. |
 | `npm run test:browser` | `scripts/smoke.ps1` starts a throwaway Vite server and drives headless Chrome (or Edge) over CDP through the real app with `?smoke=1`, twice: at a phone viewport (390×844) and a desktop one (1280×900), each in its own browser profile so the two runs cannot influence each other. The in-page suite in `src/dev/browserSmoke.ts` records and finishes a workout across two page reloads, walks exercise history (chart metric toggle, PR badge), rules, backup round-trip, Markdown/CSV export, the browser download path, Quick Log preview+confirm, the AI page with AI off, summaries, the outlier review, manual meal entry/edit/delete, the vision-specific refusal, language switching in both directions, theme switching, and the responsive layout — then crashes a component through the real error boundary and asserts React logged no console errors. Every check must pass at both viewports. |
 | `npm run verify` | lint + typecheck + tests + production build. |
 

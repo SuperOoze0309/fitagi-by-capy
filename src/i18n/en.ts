@@ -321,6 +321,9 @@ export const en = {
     step2: 'Enter any OpenAI-compatible base URL, for example {openai}, {deepseek} or a local Ollama at {ollama}.',
     step3: 'Enter the model name and, if the endpoint needs one, an API key.',
     keyStaysLocal: 'The key is stored only on this device and is never included in a backup.',
+    memoryLoadFailed: 'Could not load the saved conversation',
+    memorySaveFailed: 'Could not save the conversation on this device',
+    memoryClearFailed: 'Could not clear the saved conversation',
     worksWithoutAi: 'Works without AI',
     openQuickLog: 'Open',
     openSettings: 'Open settings',
@@ -332,7 +335,7 @@ export const en = {
     summariseBody: 'Sends the built context once and asks for a short recap. No advice.',
     summarise: 'Summarise',
     privacy:
-      'Only the training context shown under each answer is sent to {target}. The app has no server of its own and sends nothing else.',
+      'Chat history stays on this device and is not included in backups. Each request sends up to 8 earlier exchanges plus the training context shown under the answer to {target}. The app has no server of its own.',
     conversation: 'Conversation',
     youAsked: 'you asked',
     sentToModel: 'Sent to the model · {count} characters',

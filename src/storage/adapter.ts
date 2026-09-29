@@ -24,7 +24,7 @@ export type CollectionName = 'workouts' | 'rules' | 'summaries' | 'meals' | 'rem
  * Key/value areas. `images` holds one compressed data URL per meal photo — one row
  * per picture, so capturing a new photo never rewrites the existing ones.
  */
-export type KeyValueName = 'settings' | 'presets' | 'images' | 'profile';
+export type KeyValueName = 'settings' | 'presets' | 'images' | 'profile' | 'aiChat';
 
 /** A store area that holds many records keyed by `id`. */
 export interface Collection<T extends { id: string }> {
