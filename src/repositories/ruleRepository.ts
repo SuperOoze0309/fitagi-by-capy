@@ -56,6 +56,25 @@ export class RuleRepository {
     return rule;
   }
 
+  /**
+   * Bulk write for a restore.
+   *
+   * Rules arriving from a file keep their own id and `createdAt`: an imported backup
+   * is a reproduction of the user's data, not a fresh set of edits, and re-stamping
+   * the date would quietly rewrite history. The match text is normalised with the
+   * same function `save()` uses, so resolution behaves identically either way.
+   */
+  async putMany(rules: AliasRule[]): Promise<void> {
+    if (rules.length === 0) return;
+    await this.collection.putMany(
+      rules.map((rule) => ({
+        ...rule,
+        match: exerciseGroupKey(rule.match),
+        normalized: rule.normalized.trim(),
+      })),
+    );
+  }
+
   async remove(id: string): Promise<void> {
     await this.collection.remove(id);
   }

@@ -203,10 +203,18 @@ export class ProfileRepository {
     return run;
   }
 
+  /**
+   * Remove the profile entirely.
+   *
+   * It used to write an empty profile stamped with the current time, which is a
+   * different thing: the store then held a profile that had just been "updated",
+   * and a restore that carried no profile left a fresh timestamp behind instead of
+   * the state the file describes. Deleting the row is what "no profile" means; a
+   * read then returns the shared empty profile.
+   */
   async clear(): Promise<UserProfile> {
-    const cleared = { ...EMPTY_PROFILE, updatedAt: nowIso() };
-    await this.store.set(PROFILE_KEY, cleared);
-    return cleared;
+    await this.store.remove(PROFILE_KEY);
+    return EMPTY_PROFILE;
   }
 }
 
@@ -292,6 +300,12 @@ export class SummaryRepository {
   async save(summary: TrainingSummary): Promise<TrainingSummary> {
     await this.collection.put(summary);
     return summary;
+  }
+
+  /** Bulk write for a restore, so a long history is not one round trip per day. */
+  async putMany(summaries: TrainingSummary[]): Promise<void> {
+    if (summaries.length === 0) return;
+    await this.collection.putMany(summaries);
   }
 
   async remove(id: string): Promise<void> {

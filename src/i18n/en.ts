@@ -463,6 +463,8 @@ export const en = {
     exportFailed: 'Export failed',
     importFailed: 'Import failed',
     importUnreadable: 'Could not read that backup file',
+    importRejectedTitle: 'This file was not imported',
+    importRejectedPickAnother: 'Choose another file',
     nothingInRange: 'Nothing in that range to export',
     exportDone: '{format} · {workouts} workouts · {sets} sets → {file}',
     exportShared: '{format} · {workouts} workouts · {sets} sets ready to share',

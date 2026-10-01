@@ -477,6 +477,8 @@ export const es: Messages = {
     exportFailed: 'La exportación ha fallado',
     importFailed: 'La importación ha fallado',
     importUnreadable: 'No se pudo leer ese archivo de copia',
+    importRejectedTitle: 'Este archivo no se importó',
+    importRejectedPickAnother: 'Elegir otro archivo',
     nothingInRange: 'No hay nada que exportar en ese rango',
     exportDone: '{format} · {workouts} entrenos · {sets} series → {file}',
     exportShared: '{format} · {workouts} entrenos · {sets} series listos para compartir',

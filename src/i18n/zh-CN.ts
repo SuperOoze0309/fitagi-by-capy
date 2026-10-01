@@ -451,6 +451,8 @@ export const zhCN: Messages = {
     exportFailed: '导出失败',
     importFailed: '导入失败',
     importUnreadable: '无法读取该备份文件',
+    importRejectedTitle: '这个文件没有被导入',
+    importRejectedPickAnother: '换一个文件',
     nothingInRange: '这个范围内没有可导出的数据',
     exportDone: '{format} · {workouts} 次训练 · {sets} 组 → {file}',
     exportShared: '{format} · {workouts} 次训练 · {sets} 组，可分享',

@@ -1,0 +1,37 @@
+Make a restore atomic, and refuse a bad file instead of trimming it
+
+DS-02 and DS-03 from notes/review-2026-10-01.md, both of which lose user data.
+
+Restore used to clear six collections and only then write the incoming rows, with no
+transaction and no way back: a single failed write left an empty app and the original
+data already gone. It now writes everything first, reads a journal of what was there
+before the first write, and only then removes what the backup does not contain, one
+collection at a time. A failure anywhere restores the journal rows, removes the rows
+the failed attempt introduced, and throws BackupRestoreError saying the previous data
+was put back. Meal photos are dropped by key (image:<mealId>) rather than read into
+memory, so the deliberate "a restored meal keeps its numbers and loses its picture"
+rule is unchanged and a journal never holds image data.
+
+The storage interface exposes no cross-collection transaction, so this is
+compensating rollback rather than database-level atomic commit. Said plainly here and
+in the handoff note rather than implied by the word "atomic".
+
+Validation treated a malformed record as something to filter out. A file could import
+"successfully" while dropping a workout the user could see in it, and a record that
+passed the shallow check -- a reminder with weekdays: 7 -- could still throw during
+the write, after the clears. parseBackup now delegates to a strict validateBackup that
+returns every problem with its path, refuses duplicate ids, and checks nested shapes,
+parseable dates, numbers and enums. applyBackup validates again on entry, so a
+hand-built document cannot reach storage either. The Data screen lists the problems
+and offers to pick another file.
+
+Two supporting fixes: ProfileRepository.clear() deletes the row instead of writing an
+empty profile stamped with the current time, so a backup with no profile restores no
+profile; and RuleRepository/SummaryRepository gained putMany so a restore is not one
+round trip per row.
+
+Tests: src/test/restore.test.ts adds 10 cases, including the injected-write-failure
+case from the review -- the stored workout, meal and alias rule are all still there
+afterwards, on the memory adapter and on the real IndexedDB adapter. The two tests
+that asserted the old drop-silently behaviour now assert refusal with paths.
+292 -> 302 tests across 59 suites.

@@ -16,7 +16,13 @@ import {
   createEmptyReminder,
 } from '@/repositories/planRepository';
 import { createEmptyMeal, createEmptyMealItem, sumItems, summarizeDay } from '@/repositories/mealRepository';
-import { createBackup, parseBackup, serializeBackup, applyBackup } from '@/services/backup';
+import {
+  BackupParseError,
+  applyBackup,
+  createBackup,
+  parseBackup,
+  serializeBackup,
+} from '@/services/backup';
 import { DEFAULT_THEME_ID } from '@/theme/tokens';
 import type { Meal, UserProfile } from '@/domain/types';
 
@@ -405,7 +411,9 @@ describe('backup compatibility', () => {
     assert.equal(profile.heightCm, 165);
   });
 
-  it('drops malformed meals instead of failing the whole restore', async () => {
+  it('refuses a restore whose meals are malformed, before touching the stored data', async () => {
+    // The previous contents, which a refused restore must leave exactly as they are.
+    const before = await repos.training.all();
     const document = await createBackup(repos);
     const messy = {
       ...JSON.parse(serializeBackup(document)),
@@ -415,16 +423,23 @@ describe('backup compatibility', () => {
         null,
         'nope',
       ],
-      profile: { nonsense: true },
+      profile: { name: 'Someone', unitSystem: 'stone', weightKg: 'heavy' },
     };
 
-    const parsed = parseBackup(JSON.stringify(messy));
-    assert.deepEqual(
-      parsed.meals.map((entry) => entry.id),
-      ['ok'],
+    assert.throws(
+      () => parseBackup(JSON.stringify(messy)),
+      (error: unknown) => {
+        assert.ok(error instanceof BackupParseError);
+        assert.match(error.message, /meals\[1\]\.eatenAt/);
+        assert.match(error.message, /meals\[2\]/);
+        assert.match(error.message, /meals\[3\]/);
+        assert.match(error.message, /profile\.unitSystem|profile\.name/);
+        return true;
+      },
     );
-    // A profile that does not look like one becomes null rather than being coerced.
-    assert.equal(parsed.profile, null);
+
+    // Nothing was written on the way to that refusal.
+    assert.deepEqual(await repos.training.all(), before, 'the stored log is untouched');
   });
 });
 

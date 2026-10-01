@@ -257,7 +257,13 @@ describe('backup parsing and validation', () => {
     assert.throws(() => parseBackup(JSON.stringify(broken)), BackupParseError);
   });
 
-  it('drops malformed records instead of failing the whole import', () => {
+  it('refuses a file with malformed records and names every place that is wrong', () => {
+    /*
+     * This used to filter the bad rows out and import the rest, which looked like a
+     * successful restore while quietly losing records the user could see in their own
+     * file. Refusing is the honest outcome; the message has to be specific enough to
+     * act on, so every problem is reported with its path.
+     */
     const messy = {
       ...valid,
       workouts: [
@@ -274,13 +280,29 @@ describe('backup parsing and validation', () => {
         { id: 's4', kind: 'yearly', periodKey: '2026' },
       ],
     };
-    const parsed = parseBackup(JSON.stringify(messy));
-    assert.equal(parsed.workouts.length, 1);
-    assert.equal(parsed.aliasRules.length, 1);
-    // Only rows with an id, a period and a known kind survive.
-    assert.deepEqual(
-      parsed.summaries.map((summary) => summary.id),
-      ['s1'],
+
+    assert.throws(
+      () => parseBackup(JSON.stringify(messy)),
+      (error: unknown) => {
+        assert.ok(error instanceof BackupParseError);
+        const lines = error.message.split('\n');
+        for (const expected of [
+          'workouts[1].startTime',
+          'workouts[1].exercises',
+          'workouts[2]',
+          'workouts[3]',
+          'aliasRules[1].id',
+          'summaries[1].kind',
+          'summaries[2].periodKey',
+          'summaries[3].kind',
+        ]) {
+          assert.ok(
+            lines.some((line) => line.includes(expected)),
+            `the message should point at ${expected}:\n${error.message}`,
+          );
+        }
+        return true;
+      },
     );
   });
 

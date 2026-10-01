@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.9.0-informational.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Android%206.0%2B-3ddc84.svg)](#supported-devices)
-[![Tests](https://img.shields.io/badge/tests-292%20passing-brightgreen.svg)](docs/DEVELOPING.md#verify)
+[![Tests](https://img.shields.io/badge/tests-302%20passing-brightgreen.svg)](docs/DEVELOPING.md#verify)
 
 A free, open-source, local-first workout and meal tracker for Android. The mascot is a ragdoll cat,
 drawn in code rather than shipped as an image.
@@ -503,7 +503,7 @@ The two rules that matter most:
    by an older version still imports. The frozen identifiers listed above exist for that reason — do
    not rename them.
 
-Run `npm run verify` before opening a pull request: lint, typecheck, 292 unit tests and a production
+Run `npm run verify` before opening a pull request: lint, typecheck, 302 unit tests and a production
 build. [`docs/DEVELOPING.md`](docs/DEVELOPING.md) has the rest, including the browser suite that drives
 the real app in headless Chrome at two viewports.
 

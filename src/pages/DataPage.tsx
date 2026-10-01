@@ -41,6 +41,8 @@ export function DataPage() {
   );
   const [lastExport, setLastExport] = useState<string | null>(null);
   const [range, setRange] = useState<'all' | 'month' | 'week'>('all');
+  /** Why the chosen file was refused; empty when there is nothing to report. */
+  const [fileProblems, setFileProblems] = useState<string[]>([]);
 
   const loadCounts = useCallback(async () => {
     const repos = repositories();
@@ -124,12 +126,21 @@ export function DataPage() {
     if (!picked) return;
     try {
       const document = parseBackup(picked.text);
+      setFileProblems([]);
       setPending({ document, summary: summarizeBackup(document), fileName: picked.name });
     } catch (error) {
-      toast.show(
-        error instanceof BackupParseError ? error.message : t('data.importUnreadable'),
-        'error',
-      );
+      /*
+       * A rejected file lists every problem with the path it was found at. That is the
+       * difference between "this file is unreadable" and "row 42 of meals has no
+       * timestamp", and the second one is actionable: the file is plain JSON the user
+       * can open. The first line is the headline, the rest is the detail list.
+       */
+      const lines =
+        error instanceof BackupParseError
+          ? error.message.split('\n').map((line) => line.trim()).filter((line) => line !== '')
+          : [t('data.importUnreadable')];
+      setFileProblems(lines);
+      toast.show(t('data.importUnreadable'), 'error');
     }
   };
 
@@ -280,6 +291,20 @@ export function DataPage() {
           danger
           onCancel={() => setPending(null)}
           onConfirm={() => void confirmImport()}
+        />
+      ) : null}
+
+      {fileProblems.length > 0 ? (
+        <ConfirmDialog
+          title={t('data.importRejectedTitle')}
+          message={fileProblems.join('\n')}
+          confirmLabel={t('common.close')}
+          cancelLabel={t('data.importRejectedPickAnother')}
+          onConfirm={() => setFileProblems([])}
+          onCancel={() => {
+            setFileProblems([]);
+            void handlePickFile();
+          }}
         />
       ) : null}
     </>

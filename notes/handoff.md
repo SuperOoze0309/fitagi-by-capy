@@ -110,3 +110,35 @@
   模拟「磁盘有旧记录、连接注册为空」，未在真实 SQLite 文件上做 v3 → v4）
 - 已知风险：`isDBExists` 的返回值只作信息展示，不参与任何数据决策；若插件消息措辞变化，
   `isAlreadyConnected` 会退化为「当作真实失败」——方向是响亮而不是静默
+
+## 2026-10-01 · DS-02 恢复原子性 + DS-03 备份校验
+
+- 状态：已交待验收
+- 改动：
+  - `src/services/backup.ts`：
+    - **新增 `validateBackup()`**（严格校验，返回全部问题及路径）与 `describeBackupProblems()`
+    - `parseBackup()` 改为委托严格校验：非法文件**拒绝并列出位置**，不再静默 filter 掉坏行
+    - `applyBackup()` 重写：**先写入、后删除**；进入前再校验一次（手工构造的文档也拦）；
+      失败时用**写前快照（journal）**回滚并恢复旧行、删除新行；照片按 `image:<id>` 键删除，
+      既不读入内存也不改变「恢复后保留数字、丢弃图片」的既有约定
+    - 新增 `BackupRestoreError`，消息明确说明数据被放回去了
+    - 删除 7 个宽松类型守卫（`isWorkout` 等），它们正是「静默丢行」的来源
+  - `src/repositories/ruleRepository.ts` / `settingsRepository.ts`：补 `putMany`（恢复不再逐条 save）
+  - `src/repositories/settingsRepository.ts`：`ProfileRepository.clear()` 改为**删除该行**并返回
+    共享的空资料，不再写入一个「刚刚更新过」的空资料
+  - `src/pages/DataPage.tsx` + `src/i18n/{en,zh-CN,es}.ts`：被拒绝的文件弹窗列出每个问题位置，
+    并提供「换一个文件」
+  - `src/test/restore.test.ts`（**新增 10 项**）：注入写失败后原训练/饮食/规则仍在、正常恢复
+    覆盖正确、空资料覆盖旧资料、照片随餐删除、逐条问题路径、重复 id 拒绝、`applyBackup`
+    同样拦非法文档、真实 IndexedDB 下的写失败回滚
+  - 两处旧测试按新契约改写（`backup.test.ts`、`migration.test.ts` 的「丢弃坏行」→「拒绝并指出位置」）
+  - 六处测试计数 292 → 302 / 59 套件
+- 已自测：`npm test` **302 通过 / 59 套件 / 0 失败**；`npm run verify` exit 0；
+  浏览器冒烟手机 165 / 桌面 166，控制台零错误
+- 与任务单的对应：DS-02 要求「恢复必须完整提交或保留原数据」——本轮采用「先写后删 + 写前快照
+  回滚」；存储接口没有暴露跨集合事务，因此不是数据库级原子提交，这一点如实记录
+- 没验证：真机上的大备份（数千条）恢复耗时与内存占用；原生分享/选择器路径
+- 需要对方：DS-02 的回滚方案是否达到验收标准（若要求数据库级事务，需要先给
+  `StorageAdapter` 增加事务能力，那属于接口变更，建议单独排一项）
+- 已知风险：回滚本身失败时抛 `BackupRestoreError` 并在消息里说明，不会谎报成功；
+  照片按 id 推导键名，若将来照片键规则改变需同步此处
