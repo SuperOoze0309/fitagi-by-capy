@@ -121,6 +121,17 @@ The store names are enumerated once, in the `CollectionName` and `KeyValueName` 
 also creates a `meta` table that the adapter never reads or writes; it is reserved, not part of the
 app's contract.
 
+**The SQLite connection contract comes first.** In plugin v7 every method resolves the connection from
+a per-process map before doing anything else, and throws `No available connection for database …` when
+it is missing — `isDBExists` included, which reads the file only to answer a question about a
+connection that must already exist. So `SqliteAdapter.init()` registers the connection
+(`createConnection`), then opens it, then runs the additive schema. A second registration of the same
+name is refused by the plugin (`Connection … already exists`), which is not a failure here: a retry, a
+hot reload or a `close()` that never reached the plugin all leave a live registration, so that
+specific error is accepted and the rest of the startup continues. `FakeSqlitePlugin` enforces the same
+preconditions, because an adapter that gets this order wrong passes against a permissive double and
+fails on a phone — which is exactly what happened once.
+
 Each concern owns its own store:
 
 | Store | Holds | Why it is separate |

@@ -54,3 +54,31 @@
 - 没验证：真实模型端点是否始终遵循这些提示词
 - 需要对方：无
 - 已知风险：这是提示词约束，无法保证所有模型每次都遵守；仓库真话清单中的真机和原生功能限制仍适用
+
+## 2026-10-01 · 仓库缺陷审查与 DeepSeek 修复任务
+
+- 状态：已交待验收
+- 改动：
+  - `notes/review-2026-10-01.md`（新增：22 项任务、代码位置、证据等级、优先级、四个批次和逐项验收要求）
+  - `notes/review-repro-2026-10-01.md`（新增：可复制执行的隔离复现代码和实际输出摘要）
+  - `notes/handoff.md`（本次审查与任务交接）
+- 已自测：`npm test` 283 通过 / 55 套件 / 0 失败，exit 0；从复现附录运行 20 个隔离探针，20 项错误现象全部复现，exit 0；`git diff --check` 通过
+- 没验证：6 项静态任务的真实组件/原生路径；本轮未跑完整 verify 或浏览器冒烟，未安装 APK，未访问真实模型服务
+- 需要对方：DeepSeek 按任务单四个批次实施 22 项修复，新增必要行为回归测试并逐项填写交接；涉及组件/原生的任务补对应验证或如实列出仍未验证部分
+- 已知风险：现有测试通过不等于这些问题已修复。任务单区分 API 隔离复现、页面调用链重放和原生契约替身；产品代码和用户数据库本轮未修改
+
+## 2026-10-01 · 批次 A 开工登记（DS-01 起）
+
+- 状态：**正在写**
+- 写者：验收方
+- 本轮要改的文件：`src/storage/sqliteAdapter.ts`、`src/test/FakeSqlitePlugin.ts`、
+  `src/test/sqlite.test.ts`；批次 A 后续任务还会用到 `src/storage/index.ts`、
+  `src/storage/adapter.ts`、`src/storage/idbAdapter.ts`、`src/services/backup.ts`
+- 开工前完成的独立复核（源码 + 插件原生实现，结论与任务单一致）：
+  DS-01（`CapacitorSQLite.java:1049` 的 `isDBExists` 无连接即抛，而 `sqliteAdapter.ts:41`
+  第一步就调用它）、DS-07（表单存 kg，`userContext` 又按 lb 二次换算）、
+  DS-10（接口 `streamChat` 与实现 `chatStream` 名称不一致，可选属性让编译不报错）、
+  DS-17（预览模型无 `rir`，`previewToDraft` 固定 null）、DS-16（`putMany` 绕过 active 唯一约束）
+- 请勿同时编辑上面列出的文件；批次 B / C / D 的文件暂未触碰
+- 任务单中 DS-06 / 09 / 12 / 19 / 20 / 21 仍只有静态审查，修复时需补组件或原生路径验证，
+  或如实标注仍未验证

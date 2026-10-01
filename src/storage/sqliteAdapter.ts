@@ -41,10 +41,23 @@ export class SqliteAdapter implements StorageAdapter {
   async init(): Promise<void> {
     if (this.plugin) return;
     const plugin = await loadPlugin();
-    // Creating a connection that already exists throws in the plugin, so only
-    // create it when the database file is not there yet.
-    const exists = await plugin.isDBExists({ database: DB_NAME, readonly: false });
-    if (!exists.result) {
+
+    /*
+     * The plugin's connection contract, taken from its own native source
+     * (`CapacitorSQLite.java`): every method except `createConnection` first looks
+     * the connection up in a per-process map and throws
+     * "No available connection for database <name>" when it is missing — including
+     * `isDBExists`, which reads the file only to answer a question about a connection
+     * that must already exist. So the connection is established *first*, and the file
+     * is inspected afterwards.
+     *
+     * `createConnection` throws "Connection <name> already exists" when the map still
+     * holds one, which is exactly what happens on a retry, after a hot reload, or when
+     * `close()` did not reach the plugin. Registering a connection is idempotent from
+     * this adapter's point of view, so that outcome is accepted and work continues;
+     * anything else is a real failure and propagates.
+     */
+    try {
       await plugin.createConnection({
         database: DB_NAME,
         version: SCHEMA_VERSION,
@@ -52,8 +65,13 @@ export class SqliteAdapter implements StorageAdapter {
         mode: 'no-encryption',
         readonly: false,
       });
+    } catch (error) {
+      if (!isAlreadyConnected(error)) throw error;
     }
+
     await plugin.open({ database: DB_NAME, readonly: false });
+    // Additive by construction (`CREATE TABLE IF NOT EXISTS`), which is also what
+    // carries an older database across a schema bump.
     await plugin.execute({ database: DB_NAME, statements: SCHEMA });
     this.plugin = plugin;
   }
@@ -211,6 +229,22 @@ async function loadPlugin(): Promise<CapacitorSQLitePlugin> {
     })();
   }
   return pluginPromise;
+}
+
+/**
+ * True when the plugin refused to register a connection because one is already
+ * registered for this database. That is not a failure: the connection this adapter
+ * needs is present, which is the whole point of the call.
+ *
+ * Matched on the message rather than an error code, because the plugin reports
+ * failures as strings ("Connection <name> already exists", wrapped by the bridge as
+ * "CreateConnection: ..."). The comparison is case-insensitive and tolerates both
+ * wordings so a message tweak in a plugin upgrade degrades into "treated as a real
+ * failure" — loud, never silent data loss.
+ */
+function isAlreadyConnected(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /already exists/i.test(message);
 }
 
 /** `query` returns loosely-typed rows; narrow them once, here. */

@@ -12,6 +12,14 @@ import type { CapacitorSQLitePlugin } from '@capacitor-community/sqlite';
  *   - `json` round-trips through the denormalized columns,
  *   - `WHERE` clauses for `id` and for the summaries `kind` filter work.
  *
+ * It also reproduces the plugin's **connection contract**, which is the part that
+ * cannot be caught by types: every method except `createConnection` requires a
+ * connection for the database to be registered, and a second `createConnection`
+ * for the same name is refused. The real plugin throws in both cases — see
+ * `CapacitorSQLite.java`, `isDBExists` and `createConnection` — and an adapter that
+ * calls them in the wrong order works perfectly against a permissive double while
+ * failing on a phone. The preconditions here exist so that cannot happen again.
+ *
  * If the adapter's SQL drifts, this double stops matching and the test fails.
  */
 
@@ -33,6 +41,10 @@ export class FakeSqlitePlugin {
    * the prototype methods are installed and would shadow the `open()` method below.
    */
   private opened = false;
+  /** Mirrors the plugin's per-process connection map (`dbDict`). */
+  private connected = false;
+  /** Mirrors the database file on disk, which outlives the connection. */
+  private fileExists = false;
 
   constructor() {
     for (const name of DEFAULT_TABLES) this.tables.set(name, { rows: new Map(), order: [] });
@@ -54,21 +66,35 @@ export class FakeSqlitePlugin {
     return this.opened;
   }
 
+  hasDatabaseFile(): boolean {
+    return this.fileExists;
+  }
+
   // -- plugin surface ---------------------------------------------------------
 
   async isDBExists(options: { database?: string }): Promise<{ result: boolean }> {
     this.record('isDBExists');
+    // The real implementation resolves the connection first and only then stats the
+    // file, so without a connection it throws instead of answering.
+    this.requireConnection('isDBExists');
     void options;
-    return { result: this.tables.size > 0 };
+    return { result: this.fileExists };
   }
 
   async createConnection(options: { database?: string }): Promise<void> {
     this.record('createConnection');
     void options;
+    if (this.connected) {
+      throw new Error('CreateConnection: Connection fitness_agent already exists');
+    }
+    this.connected = true;
+    // The plugin creates the database file with the connection on first use.
+    this.fileExists = true;
   }
 
   async open(options: { database?: string }): Promise<void> {
     this.record('open');
+    this.requireConnection('open');
     void options;
     this.opened = true;
   }
@@ -83,10 +109,13 @@ export class FakeSqlitePlugin {
     this.record('deleteDatabase');
     void options;
     for (const name of DEFAULT_TABLES) this.tables.set(name, { rows: new Map(), order: [] });
+    this.fileExists = false;
+    this.connected = false;
   }
 
   async execute(options: { statements?: string }): Promise<unknown> {
     this.record('execute');
+    this.requireConnection('execute');
     // The adapter only sends CREATE TABLE / CREATE INDEX statements here.
     const statements = options.statements ?? '';
     for (const match of statements.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)) {
@@ -101,6 +130,7 @@ export class FakeSqlitePlugin {
     set?: { statement?: string; values?: unknown[] }[];
   }): Promise<unknown> {
     this.record('executeSet');
+    this.requireConnection('executeSet');
     for (const entry of options.set ?? []) {
       this.apply(entry.statement ?? '', entry.values ?? []);
     }
@@ -109,12 +139,14 @@ export class FakeSqlitePlugin {
 
   async run(options: { statement?: string; values?: unknown[] }): Promise<unknown> {
     this.record('run');
+    this.requireConnection('run');
     this.apply(options.statement ?? '', options.values ?? []);
     return { changes: { changes: 1 } };
   }
 
   async query(options: { statement?: string; values?: unknown[] }): Promise<{ values: unknown[] }> {
     this.record('query');
+    this.requireConnection('query');
     return { values: this.select(options.statement ?? '', options.values ?? []) };
   }
 
@@ -126,6 +158,15 @@ export class FakeSqlitePlugin {
       throw new Error(`fake sqlite: ${name} failed`);
     }
     this.calls.push(name);
+  }
+
+  /** The precondition the real plugin enforces before anything but createConnection. */
+  private requireConnection(method: string): void {
+    if (!this.connected) {
+      throw new Error(
+        `${method}: No available connection for database fitness_agent`,
+      );
+    }
   }
 
   private tableOf(sql: string): Table {

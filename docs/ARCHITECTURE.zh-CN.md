@@ -99,6 +99,8 @@ MealItem
 
 存储区名称只在 `src/storage/adapter.ts` 的 `CollectionName` 与 `KeyValueName` 联合类型里枚举一次，因此不可能只为某一个后端新增集合。SQLite schema 还会建一张 `meta` 表，适配器从不读写它；它是预留的，不属于应用的契约。
 
+**SQLite 的连接契约必须排在前面。** 在插件 v7 里，除注册连接之外，每个方法都会先从进程内的连接表里取连接，取不到就抛 `No available connection for database …`——`isDBExists` 也一样，它读文件只是为了回答一个「连接必须已经存在」的问题。所以 `SqliteAdapter.init()` 的顺序是：先注册连接（`createConnection`），再打开（`open`），最后执行增量 schema。同一个名字第二次注册会被插件拒绝（`Connection … already exists`），但在这里不算失败：重试、热重载、或者 `close()` 没送到插件，都会留下一个仍然有效的注册，因此这一条特定错误会被接受，启动继续往下走。`FakeSqlitePlugin` 强制同样的前置条件——把顺序写错的适配器能骗过宽松的替身，却会在真机上崩，这件事已经发生过一次。
+
 每个关注点拥有自己的存储区：
 
 | 存储区 | 存放内容 | 为什么要独立 |

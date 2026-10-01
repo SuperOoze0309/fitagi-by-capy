@@ -11,6 +11,7 @@ import {
   withSetWeight,
 } from '@/domain/workout';
 import { localDateKey } from '@/domain/datetime';
+import { DEFAULT_THEME_ID } from '@/theme/tokens';
 
 /**
  * Exercises the SQLite adapter — the Android production storage engine — against
@@ -43,11 +44,66 @@ describe('SQLite adapter', () => {
   it('opens the database, creates the schema and uses the flat plugin API', async () => {
     const { bundle } = await open();
     assert.equal(fake.isOpen(), true, 'the database was opened');
-    assert.deepEqual(fake.calls.slice(0, 3), ['isDBExists', 'open', 'execute']);
+    /*
+     * The order is the point. The plugin resolves a connection in every method except
+     * `createConnection`, so registering one has to come first; asking about the file
+     * before that throws "No available connection" on a real device.
+     */
+    assert.deepEqual(
+      fake.calls.slice(0, 3),
+      ['createConnection', 'open', 'execute'],
+      'the connection is registered before anything reads or opens the database',
+    );
     assert.equal(bundle.adapter.kind, 'sqlite');
     assert.match(bundle.adapter.label, /fitness_agent\.db$/);
     await bundle.adapter.close();
     assert.equal(fake.isOpen(), false);
+  });
+
+  it('treats an already registered connection as success, not as a failure', async () => {
+    // A retry, a hot reload, or a session where `close()` never reached the plugin all
+    // leave the connection registered. Registering it again throws — the plugin's own
+    // words — and that must not be mistaken for a broken database.
+    await fake.createConnection({ database: 'fitness_agent' });
+
+    const { bundle } = await open();
+    const settings = await buildRepositories(bundle).settings.ensureInitialized();
+    assert.equal(settings.theme, DEFAULT_THEME_ID, 'the adapter is usable, not degraded');
+    assert.equal(
+      fake.calls.filter((call) => call === 'createConnection').length,
+      2,
+      'the second registration was attempted and tolerated',
+    );
+
+    await bundle.adapter.close();
+  });
+
+  it('never asks the plugin about the file before a connection is registered', async () => {
+    // Regression guard: `isDBExists` used to be the first call this adapter made, and
+    // the plugin throws when no connection is registered yet.
+    const { bundle } = await open();
+    const dbExistsCall = fake.calls.indexOf('isDBExists');
+    if (dbExistsCall !== -1) {
+      assert.ok(
+        fake.calls.indexOf('createConnection') < dbExistsCall,
+        'isDBExists must never precede createConnection',
+      );
+    }
+    await bundle.adapter.close();
+  });
+
+  it('keeps an existing database file across a close and reopen', async () => {
+    const { bundle, repos } = await open();
+    await repos.training.put(createWorkout());
+    assert.equal(fake.hasDatabaseFile(), true, 'the first connection created the file');
+
+    await bundle.adapter.close();
+    resetStorageForTests();
+
+    const second = await open();
+    assert.equal(fake.hasDatabaseFile(), true, 'a reopen does not delete or recreate it');
+    assert.equal((await second.repos.training.all()).length, 1, 'the workout is still there');
+    await second.bundle.adapter.close();
   });
 
   it('persists a workout aggregate and mirrors its columns', async () => {
