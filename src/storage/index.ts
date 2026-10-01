@@ -33,40 +33,38 @@ let initialising: Promise<StorageBundle> | null = null;
 /**
  * Pick the storage backend for the current platform.
  *
- * Android → SQLite (production). Browser → IndexedDB (development + fallback).
- * The check is a build-time constant, so the unused adapter is tree-shaken away.
+ * Android → SQLite (production). Browser → IndexedDB, which *is* the browser's
+ * storage rather than a consolation prize.
+ *
+ * The two are never mixed. On a native build a SQLite failure used to be logged and
+ * then quietly answered by an empty IndexedDB: the phone still held every workout,
+ * but the app showed an empty log, and anything recorded from then on went into a
+ * second, invisible database. A failure to open the platform's own database is a
+ * startup failure, and it is reported as one — the splash screen explains it and
+ * offers a retry — because "your data is still on this phone" and "here is an empty
+ * app" cannot both be true.
+ *
+ * One retry first, for a race that is not a failure: a reload can begin before the
+ * previous page has finished upgrading the database, and an open is then blocked
+ * until the old connection goes away.
  */
 async function createAdapter(): Promise<StorageAdapter> {
-  if (isNativePlatform()) {
-    const adapter = new SqliteAdapter();
-    try {
-      await adapter.init();
-      return adapter;
-    } catch (error) {
-      console.warn('[storage] SQLite unavailable, falling back to IndexedDB', error);
-    }
-  }
+  const native = isNativePlatform();
 
-  /*
-   * One retry, because the first open after a schema bump can legitimately lose a
-   * race: a reload can begin before the previous document has finished upgrading the
-   * database, and the new document's open is then blocked. The block clears as soon
-   * as the old connection goes away, so a short wait and a second attempt succeeds —
-   * without it the app shows its "could not open local storage" screen on launch,
-   * which looks like data loss to the person holding the phone.
-   */
-  const first = new IndexedDbAdapter();
+  const attempt = async (): Promise<StorageAdapter> => {
+    const adapter: StorageAdapter = native ? new SqliteAdapter() : new IndexedDbAdapter();
+    await adapter.init();
+    return adapter;
+  };
+
   try {
-    await first.init();
-    return first;
+    return await attempt();
   } catch (error) {
-    console.warn('[storage] IndexedDB open failed, retrying once', error);
+    console.warn('[storage] open failed, retrying once', native ? 'SQLite' : 'IndexedDB', error);
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
 
-  const retry = new IndexedDbAdapter();
-  await retry.init();
-  return retry;
+  return attempt();
 }
 
 export function isNativePlatform(): boolean {

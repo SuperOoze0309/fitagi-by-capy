@@ -37,6 +37,12 @@ export class SqliteAdapter implements StorageAdapter {
   readonly label = `SQLite · ${DB_NAME}.db`;
 
   private plugin: CapacitorSQLitePlugin | null = null;
+  /** False only on a genuinely fresh install; informative, never load-bearing. */
+  private existingDatabase = false;
+
+  hasExistingDatabase(): boolean {
+    return this.existingDatabase;
+  }
 
   async init(): Promise<void> {
     if (this.plugin) return;
@@ -69,11 +75,32 @@ export class SqliteAdapter implements StorageAdapter {
       if (!isAlreadyConnected(error)) throw error;
     }
 
+    /*
+     * Registration and the file are different things. `createConnection` only puts a
+     * `Database` object in the map; the file appears when the database is opened
+     * (`CapacitorSQLite.open` -> `Database.open` -> `openOrCreateDatabase`). So the
+     * question "was there a log here before?" is asked between the two: after the
+     * connection exists, because `isDBExists` resolves it, and before the open, which
+     * would create the file and make every install look like an existing one.
+     */
+    const existingDatabase = await this.databaseFileExists(plugin);
     await plugin.open({ database: DB_NAME, readonly: false });
+    this.existingDatabase = existingDatabase;
     // Additive by construction (`CREATE TABLE IF NOT EXISTS`), which is also what
     // carries an older database across a schema bump.
     await plugin.execute({ database: DB_NAME, statements: SCHEMA });
     this.plugin = plugin;
+  }
+
+  /** False when the plugin cannot answer. Informative only — the app never depends on it. */
+  private async databaseFileExists(plugin: CapacitorSQLitePlugin): Promise<boolean> {
+    try {
+      const exists = await plugin.isDBExists({ database: DB_NAME, readonly: false });
+      return exists.result === true;
+    } catch (error) {
+      console.warn('[storage] could not tell whether the database file already existed', error);
+      return false;
+    }
   }
 
   scope(): StorageScope {
@@ -233,18 +260,19 @@ async function loadPlugin(): Promise<CapacitorSQLitePlugin> {
 
 /**
  * True when the plugin refused to register a connection because one is already
- * registered for this database. That is not a failure: the connection this adapter
+ * registered *for this database*. That is not a failure: the connection this adapter
  * needs is present, which is the whole point of the call.
  *
  * Matched on the message rather than an error code, because the plugin reports
- * failures as strings ("Connection <name> already exists", wrapped by the bridge as
- * "CreateConnection: ..."). The comparison is case-insensitive and tolerates both
- * wordings so a message tweak in a plugin upgrade degrades into "treated as a real
- * failure" — loud, never silent data loss.
+ * failures as strings — the bridge prefixes them ("CreateConnection: ") and the
+ * native side says `Connection <name> already exists`. Both the database name and the
+ * phrase are required, so an unrelated "already exists" (a file conflict, a read-only
+ * registration, another database) is never swallowed: it stays a real failure, which
+ * is the loud direction.
  */
 function isAlreadyConnected(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /already exists/i.test(message);
+  return message.includes(DB_NAME) && /already exists/i.test(message);
 }
 
 /** `query` returns loosely-typed rows; narrow them once, here. */

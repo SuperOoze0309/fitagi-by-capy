@@ -706,7 +706,7 @@ export const zhCN: Messages = {
     goToData: '前往数据页面',
     technicalDetail: '技术细节',
     storageFailed: '无法打开本地存储',
-    storageFailedBody: '你的数据没有被修改。关闭本应用的其他标签页可能有帮助，重新加载通常也能解决。',
+    storageFailedBody: '没有任何数据被删除，你的记录还在这台设备上。重新打开应用再试一次；如果反复出现，千万不要清除应用数据——那才会真的把它抹掉。',
     notConfigured: 'AI 尚未配置。请在设置里填写 Base URL 和模型，或使用本地解析。',
     generic: '出了点问题，请再试一次。',
   },

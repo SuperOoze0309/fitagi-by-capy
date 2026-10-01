@@ -82,3 +82,31 @@
 - 请勿同时编辑上面列出的文件；批次 B / C / D 的文件暂未触碰
 - 任务单中 DS-06 / 09 / 12 / 19 / 20 / 21 仍只有静态审查，修复时需补组件或原生路径验证，
   或如实标注仍未验证
+
+## 2026-10-01 · DS-01 收尾（按 review-feedback 第 2 节）
+
+- 状态：已交待验收（本轮为 DS-01 的完整交付，含反馈要求的 1–5 项）
+- 改动：
+  - `src/storage/index.ts`（**取消原生静默降级**：原生构建下 SQLite 打不开＝启动失败，只保留一次
+    重试；浏览器仍用 IndexedDB，那是它自己的存储而不是替补）
+  - `src/storage/sqliteAdapter.ts`（顺序改为注册连接 → 问文件 → open → schema；
+    `isAlreadyConnected` 现在同时要求**库名**与 already exists 措辞；
+    新增 `hasExistingDatabase()`，在 open 之前询问，用于区分新装与老库）
+  - `src/test/FakeSqlitePlugin.ts`（区分「注册」与「文件」：`createConnection` 不再创建文件，
+    文件由 `open()` 创建，对应原生 `Database.open` → `openOrCreateDatabase`）
+  - `src/test/storageBoot.test.ts`（**新增 6 项启动入口测试**：走 `initStorage()` 自动选后端，
+    注入 open/schema 失败，断言启动失败而不是换库、重试后读回原训练、不声明 fallback）
+  - `src/test/sqlite.test.ts`（调用顺序断言更新为 注册 → 问文件 → open → schema）
+  - `src/i18n/{en,zh-CN,es}.ts`（启动失败文案改写：数据还在设备上、别清除应用数据）
+  - 六处测试计数 283 → 292（README 中英、DEVELOPING 中英、ARCHITECTURE 中英）
+- 已自测：`npm test` **292 通过 / 56 套件 / 0 失败**；`npm run verify` exit 0；
+  浏览器冒烟手机 165 / 桌面 166，控制台零错误
+- 复核证据：重跑反馈文件里那段「注入 open 失败」的探针，输出已变为
+  `{"booted":false,"error":"AUDIT_SQLITE_OPEN_FAILURE","sqliteWorkoutsStillOnDisk":1,"announcedFallback":false}`
+  —— 不再选中另一份空库，原记录仍在磁盘上
+- 没验证：真实 APK 冷启动与 v3 → v4 真机迁移；原生插件在本机不可用（无设备/模拟器）。
+  替身测试通过不等于真机通过，这一条继续保持未验证
+- 需要对方：复核第 3 点的冷启动与旧库场景是否已足够（本轮用 `seedExistingDatabaseFile()`
+  模拟「磁盘有旧记录、连接注册为空」，未在真实 SQLite 文件上做 v3 → v4）
+- 已知风险：`isDBExists` 的返回值只作信息展示，不参与任何数据决策；若插件消息措辞变化，
+  `isAlreadyConnected` 会退化为「当作真实失败」——方向是响亮而不是静默

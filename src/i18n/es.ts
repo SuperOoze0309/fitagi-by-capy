@@ -746,7 +746,7 @@ export const es: Messages = {
     technicalDetail: 'Detalle técnico',
     storageFailed: 'No se pudo abrir el almacenamiento local',
     storageFailedBody:
-      'Tus datos no se han modificado. Cerrar otras pestañas de la app puede ayudar y recargar suele resolverlo.',
+      'No se ha borrado nada: tu registro sigue en este dispositivo. Vuelve a abrir la app para reintentarlo; si sigue pasando, no borres los datos de la aplicación, porque eso sí los eliminaría.',
     notConfigured:
       'La IA no está configurada. Añade una URL base y un modelo en Ajustes, o usa el analizador local.',
     generic: 'Algo ha ido mal. Inténtalo de nuevo.',

@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.9.0-informational.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Android%206.0%2B-3ddc84.svg)](#支持的设备)
-[![Tests](https://img.shields.io/badge/tests-283%20passing-brightgreen.svg)](docs/DEVELOPING.md#验证)
+[![Tests](https://img.shields.io/badge/tests-292%20passing-brightgreen.svg)](docs/DEVELOPING.md#验证)
 
 面向 Android 的免费开源训练与饮食记录应用，本地优先。吉祥物是一只布偶猫，用代码画出来，不打包任何图片。
 
@@ -324,7 +324,7 @@ scripts/         测试解析钩子、无头浏览器冒烟驱动
 1. **组件里不许出现面向用户的字符串。** 每条文案都在 `src/i18n/en.ts` 和它的两份翻译里；目录不完整，或者某句话是从英文照抄的，`src/test/i18n.test.ts` 都会让构建失败。
 2. **绝不丢用户数据。** 结构变更只做增量，迁移补默认值，旧版本写出的文件仍然能导入。上面那四个冻结标识就是为这条存在的——别改它们的名字。
 
-提交 pull request 之前先跑 `npm run verify`：lint、类型检查、283 个单元测试、生产构建。`npm run test:browser` 还会在无头 Chrome 里按两种视口驱动真实应用。其余内容在 [`docs/DEVELOPING.md`](docs/DEVELOPING.md)。
+提交 pull request 之前先跑 `npm run verify`：lint、类型检查、292 个单元测试、生产构建。`npm run test:browser` 还会在无头 Chrome 里按两种视口驱动真实应用。其余内容在 [`docs/DEVELOPING.md`](docs/DEVELOPING.md)。
 
 ## 许可证
 

@@ -43,7 +43,11 @@ export class FakeSqlitePlugin {
   private opened = false;
   /** Mirrors the plugin's per-process connection map (`dbDict`). */
   private connected = false;
-  /** Mirrors the database file on disk, which outlives the connection. */
+  /**
+   * Mirrors the database file on disk, which outlives the connection. Created by
+   * `open()`, not by `createConnection()`: the native side registers a `Database`
+   * object first and only calls `openOrCreateDatabase` when the database is opened.
+   */
   private fileExists = false;
 
   constructor() {
@@ -87,9 +91,9 @@ export class FakeSqlitePlugin {
     if (this.connected) {
       throw new Error('CreateConnection: Connection fitness_agent already exists');
     }
+    // Registration only. The file appears when the database is opened, exactly as
+    // `CapacitorSQLite.open` -> `Database.open` -> `openOrCreateDatabase` does it.
     this.connected = true;
-    // The plugin creates the database file with the connection on first use.
-    this.fileExists = true;
   }
 
   async open(options: { database?: string }): Promise<void> {
@@ -97,6 +101,12 @@ export class FakeSqlitePlugin {
     this.requireConnection('open');
     void options;
     this.opened = true;
+    this.fileExists = true;
+  }
+
+  /** Simulates a phone whose database file is already on disk from an earlier install. */
+  seedExistingDatabaseFile(): void {
+    this.fileExists = true;
   }
 
   async close(options: { database?: string }): Promise<void> {

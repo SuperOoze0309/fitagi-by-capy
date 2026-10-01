@@ -50,9 +50,9 @@ describe('SQLite adapter', () => {
      * before that throws "No available connection" on a real device.
      */
     assert.deepEqual(
-      fake.calls.slice(0, 3),
-      ['createConnection', 'open', 'execute'],
-      'the connection is registered before anything reads or opens the database',
+      fake.calls.slice(0, 4),
+      ['createConnection', 'isDBExists', 'open', 'execute'],
+      'the connection is registered before the file is inspected, and the file is inspected before it is created',
     );
     assert.equal(bundle.adapter.kind, 'sqlite');
     assert.match(bundle.adapter.label, /fitness_agent\.db$/);

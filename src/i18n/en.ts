@@ -728,7 +728,7 @@ export const en = {
     technicalDetail: 'Technical detail',
     storageFailed: 'Could not open local storage',
     storageFailedBody:
-      'Your data has not been changed. Closing other tabs of this app can help, and reloading usually clears it.',
+      'Nothing has been deleted. Your log is still on this device. Reopen the app to try again; if it keeps happening, do not clear the app’s data — that is what would erase it.',
     notConfigured: 'AI is not configured. Add a base URL and model in Settings, or use the offline parser.',
     generic: 'Something went wrong. Please try again.',
   },
