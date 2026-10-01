@@ -29,3 +29,16 @@
   这是可接受的取舍。
 - 环境事故（记录在案）：验收时并行跑了 `npm test`，把冒烟测试的开发服务器（端口 5199）
   挤掉，桌面那轮以 `net::ERR_CONNECTION_REFUSED` 失败；单独重跑即全过。**一次只跑一个重活。**
+
+## 2026-09-29 · 教练建议的事实边界与安全提示
+
+- 状态：已交待验收
+- 改动：
+  - `src/services/ai/prompts.ts`（消除记录事实与未来建议的数字规则冲突；补充语言匹配和保守训练边界）
+  - `docs/ARCHITECTURE.md` / `docs/ARCHITECTURE.zh-CN.md`（说明新的教练提示词约束）
+  - `CHANGELOG.md`（记录本次改进）
+  - `notes/handoff.md`（追加本次交接记录）
+- 已自测：`npm run typecheck` 通过；`npm run lint` 0 错误、2 条 `AppContext.tsx` 既有警告；`git diff --check` 通过
+- 没验证：单元测试、浏览器冒烟、真实模型是否遵循提示词
+- 需要对方：按约定复验完整 verify 和两种视口冒烟，核对文档后提交推送
+- 已知风险：模型端点可能不完全遵循提示词；此修改不提供医疗诊断或伤病康复建议

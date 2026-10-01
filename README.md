@@ -206,7 +206,9 @@ Building from source, running the app in a browser, the npm scripts and the test
   - **Recorder** — parses and looks up. Gives no advice.
   - **Reminder** — what you did last time: weights, reps, RPE, trend.
   - **Coach** — may advise, and must split its answer into recorded **FACTS** and its
-    own **SUGGESTION**
+    own **SUGGESTION**. The headings follow the language you asked in; a suggested number has
+    to be grounded in a baseline you actually logged, and pain gets no diagnosis — it tells
+    you to stop the movement and see a professional
 - **Conversation, not a form**: the answer is typed onto the screen as it streams in from
   the endpoint, inside a bubble that grows, and the transcript scrolls to follow it. The
   input is docked at the bottom like a messaging app, and grows with what you type up to

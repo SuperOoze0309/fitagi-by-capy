@@ -19,6 +19,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and the proj
   **本机聊天记忆。** 最近 100 轮对话保存在本机；追问最多携带最近 8 轮，并显示实际发送的前文。
   AI 页面也会把进行中的训练加入训练上下文。
 
+### Changed / 变更
+
+- **Clearer coaching boundaries.** Coach replies match the user's language and separate logged facts
+  from hypothetical progression targets. Exact targets must be grounded in a relevant training
+  baseline; injury concerns receive no diagnosis or rehabilitation prescription.
+  **教练建议边界更清楚。** 回答跟随用户语言，并将训练记录与假设性进阶目标分开。具体目标必须有相关训练记录作依据；遇到伤痛疑虑不做诊断或康复处方。
+
 ## [0.9.0] — 2026-09-25
 
 ### Added / 新增

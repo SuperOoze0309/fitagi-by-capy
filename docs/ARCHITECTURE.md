@@ -597,9 +597,11 @@ chat history is excluded from backups.
 ### Roles
 
 `recorder` parses and looks up without advising; `reminder` reports what was actually
-logged; `coach` may advise but must answer in a `FACTS` section quoting recorded numbers
-and a separate `SUGGESTION` section. The split exists because a suggestion must never be
-mistaken for history.
+logged; `coach` may advise but must keep recorded facts and hypothetical progression targets
+separate. Coach headings follow the language of the latest question. Exact suggested targets are
+allowed only when grounded in a relevant recorded baseline and are labelled as proposals; without
+that baseline the coach asks a short question or gives a non-numeric option. The prompt also rejects
+max attempts, forced reps, training through pain, diagnosis and rehabilitation advice.
 
 The profile block is attached to **meal** requests only. The training context builder is unchanged
 and does not include it, so a question about training is answered from training data.
