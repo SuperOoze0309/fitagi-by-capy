@@ -43,3 +43,4 @@ npm-debug.log*
 .env
 .env.*
 .commit-msg.tmp
+commit-msg*.txt

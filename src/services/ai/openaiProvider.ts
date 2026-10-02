@@ -71,17 +71,25 @@ export class OpenAiCompatibleProvider implements LlmProvider {
   /**
    * The same request, read as it arrives.
    *
+   * The name matches `LlmProvider.streamChat` exactly. It used to be `chatStream`
+   * here while both the interface and the service called `streamChat`, and because the
+   * interface member is optional TypeScript was perfectly happy: the service looked up
+   * a method that did not exist, fell back to the non-streaming path, and every answer
+   * arrived in one piece. The public README promised streaming the whole time. There is
+   * now a test that calls through the service and asserts the implementation is reached.
+   *
    * `onDelta` is called with each fragment of text, and the full answer is returned
    * at the end so a caller can keep using it as the final value. Endpoints that
    * ignore `stream` and answer with a single JSON body are handled too — the body is
    * then parsed once and handed over as a single delta, so streaming degrades to
    * "appears all at once" instead of failing.
    */
-  async chatStream(
+  async streamChat(
     messages: ChatMessage[],
     onDelta: (delta: string) => void,
     options: { temperature?: number; signal?: AbortSignal } = {},
-  ): Promise<string> {    if (!this.isConfigured()) throw new LlmNotConfiguredError();
+  ): Promise<string> {
+    if (!this.isConfigured()) throw new LlmNotConfiguredError();
     const response = await this.send(messages, options, true, options.signal);
 
     if (!response.ok) {

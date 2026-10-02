@@ -100,6 +100,67 @@ describe('AI conversation storage', () => {
     assert.equal(recent[0]?.id, 'e0', 'the newest end of the list is what is kept');
   });
 
+  it('appends without touching exchanges it never read', async () => {
+    /*
+     * The page used to save a full snapshot of what it was holding. If its history read
+     * had failed, or a second page was open, that snapshot erased everything it had not
+     * seen. Appending is the fix: the stored rows survive.
+     */
+    const bundle = await initStorage();
+    const repo = buildRepositories(bundle).aiConversation;
+
+    await repo.save([entry({ id: 'stored-1' }), entry({ id: 'stored-2' })]);
+    await repo.append([entry({ id: 'fresh' })]);
+
+    assert.deepEqual(
+      (await repo.recent()).map((row) => row.id),
+      ['fresh', 'stored-1', 'stored-2'],
+      'the new exchange goes to the front and the unread ones stay',
+    );
+  });
+
+  it('does not duplicate an exchange that is appended twice', async () => {
+    const bundle = await initStorage();
+    const repo = buildRepositories(bundle).aiConversation;
+
+    await repo.append([entry({ id: 'once' })]);
+    await repo.append([entry({ id: 'once', answer: 're-asked and answered again' })]);
+
+    const recent = await repo.recent();
+    assert.equal(recent.length, 1, 'the same exchange id is one row');
+    assert.equal(recent[0]?.answer, 're-asked and answered again', 'the newest text wins');
+  });
+
+  it('keeps both exchanges when two are appended at the same time', async () => {
+    const bundle = await initStorage();
+    const repo = buildRepositories(bundle).aiConversation;
+
+    await Promise.all([
+      repo.append([entry({ id: 'concurrent-a' })]),
+      repo.append([entry({ id: 'concurrent-b' })]),
+    ]);
+
+    const ids = (await repo.recent()).map((row) => row.id).sort();
+    assert.deepEqual(ids, ['concurrent-a', 'concurrent-b'], 'neither append may be lost');
+  });
+
+  it('keeps the hundred-exchange cap when appending', async () => {
+    const bundle = await initStorage();
+    const repo = buildRepositories(bundle).aiConversation;
+
+    await repo.save(Array.from({ length: 99 }, (_, index) => entry({ id: `old-${index}` })));
+    await repo.append([entry({ id: 'new-1' }), entry({ id: 'new-2' })]);
+
+    const recent = await repo.recent();
+    assert.equal(recent.length, 100);
+    assert.equal(recent[0]?.id, 'new-1');
+    assert.equal(
+      recent.some((row) => row.id === 'old-98'),
+      false,
+      'the oldest rows fall off the end',
+    );
+  });
+
   it('clears the transcript on request', async () => {
     const bundle = await initStorage();
     const repo = buildRepositories(bundle).aiConversation;

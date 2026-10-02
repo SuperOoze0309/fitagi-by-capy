@@ -13,6 +13,14 @@ import { resequenceExercises } from '../domain/workout';
 export class TrainingRepository {
   constructor(private readonly collection: Collection<Workout>) {}
 
+  /**
+   * Serialises read-modify-write per workout id. See `mutate()` for why.
+   *
+   * Per repository instance, which is what the app uses — one shared instance built
+   * once by `buildRepositories()`.
+   */
+  private readonly writeQueues = new Map<string, Promise<void>>();
+
   async all(): Promise<Workout[]> {
     const rows = await this.collection.all();
     return rows.sort(byStartTimeDesc);
@@ -84,24 +92,26 @@ export class TrainingRepository {
     }));
   }
 
+  /**
+   * Move an exercise up or down.
+   *
+   * A move that cannot happen — the exercise is gone, or it is already at the end it
+   * was pushed towards — is left alone rather than throwing: the callers are arrow
+   * buttons, and pressing "up" on the first row should do nothing, not fail. An
+   * unknown id is reported, because that is a stale row rather than a boundary.
+   */
   async moveExercise(workoutId: string, exerciseId: string, direction: -1 | 1): Promise<Workout> {
     return this.mutate(workoutId, (workout) => {
       const index = workout.exercises.findIndex((entry) => entry.id === exerciseId);
+      if (index === -1) throw new Error(`Exercise ${exerciseId} is not in workout ${workoutId}`);
       const target = index + direction;
-      if (index === -1 || target < 0 || target >= workout.exercises.length) return workout;
+      if (target < 0 || target >= workout.exercises.length) return workout;
       const exercises = [...workout.exercises];
       [exercises[index], exercises[target]] = [exercises[target], exercises[index]];
       return { ...workout, exercises: resequenceExercises(exercises) };
     });
   }
 
-  /**
-   * Finish the session: stamp the end time and freeze the duration.
-   *
-   * The end time never precedes the start time. That matters for backdated entries
-   * (a workout you log the next morning) and for imported data, where stamping the
-   * wall clock would otherwise produce a negative or absurd duration.
-   */
   /**
    * Finish the session: stamp the end time and freeze the duration.
    *
@@ -132,15 +142,46 @@ export class TrainingRepository {
     }));
   }
 
+  /**
+   * One read-modify-write per workout.
+   *
+   * The workout page saves a whole aggregate, and several callers can reach for the
+   * same one at once: a timer flush, a set edit, a rename, a quick-log append. Each
+   * of those was an unlocked `get` followed by a `put`, so two of them read the same
+   * snapshot and the second write silently discarded the first — the classic lost
+   * update, and the reason adding exercise B could erase exercise A.
+   *
+   * Updates are therefore serialised **per workout id**, which is the smallest unit
+   * that has to stay consistent: different workouts still proceed in parallel. Each
+   * queued update reads the row fresh, so it sees what the previous one wrote.
+   *
+   * The tail of the queue is a caught promise, so one failed update cannot poison the
+   * ones behind it, and an entry removes itself once it is the last one.
+   */
   private async mutate(
     workoutId: string,
     updater: (workout: Workout) => Workout,
   ): Promise<Workout> {
-    const current = await this.collection.get(workoutId);
-    if (!current) throw new Error(`Workout ${workoutId} not found`);
-    const next = { ...updater(current), updatedAt: nowIso() };
-    await this.collection.put(next);
-    return next;
+    const previous = this.writeQueues.get(workoutId) ?? Promise.resolve();
+    const update = previous.then(async () => {
+      const current = await this.collection.get(workoutId);
+      if (!current) throw new Error(`Workout ${workoutId} not found`);
+      const next = { ...updater(current), updatedAt: nowIso() };
+      await this.collection.put(next);
+      return next;
+    });
+
+    // The queue only needs the timing; a rejection is re-thrown to this caller.
+    const tail = update.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.writeQueues.set(workoutId, tail);
+    void tail.then(() => {
+      if (this.writeQueues.get(workoutId) === tail) this.writeQueues.delete(workoutId);
+    });
+
+    return update;
   }
 }
 

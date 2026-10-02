@@ -19,6 +19,13 @@ const AI_ROLES: AiRole[] = ['recorder', 'reminder', 'coach'];
 export class AiConversationRepository {
   constructor(private readonly store: KeyValueStore) {}
 
+  /**
+   * Serialises read-modify-write, like every other multi-step write in the app: two
+   * saves started in the same tick used to read the same snapshot, so the second
+   * replaced the first and an exchange disappeared.
+   */
+  private writeQueue: Promise<void> = Promise.resolve();
+
   async recent(): Promise<AiConversationEntry[]> {
     const stored = await this.store.get<unknown>(CONVERSATION_KEY);
     if (!Array.isArray(stored)) return [];
@@ -28,16 +35,56 @@ export class AiConversationRepository {
       .slice(0, MAX_SAVED_EXCHANGES);
   }
 
+  /**
+   * Add exchanges to the front of the transcript, keeping what is already stored.
+   *
+   * This is what the AI page uses. A full-snapshot save applied whatever the page
+   * happened to be holding, so a page whose history read had failed — or a second page
+   * open at the same time — silently erased exchanges it had never seen. Appending
+   * cannot destroy rows it did not read.
+   */
+  async append(entries: readonly AiConversationEntry[]): Promise<void> {
+    const incoming = entries
+      .map(normalizeEntry)
+      .filter((entry): entry is AiConversationEntry => entry !== null);
+    if (incoming.length === 0) return;
+
+    await this.withWriteLock(async () => {
+      const existing = await this.recent();
+      const incomingIds = new Set(incoming.map((entry) => entry.id));
+      const merged = [...incoming, ...existing.filter((entry) => !incomingIds.has(entry.id))].slice(
+        0,
+        MAX_SAVED_EXCHANGES,
+      );
+      await this.store.set(CONVERSATION_KEY, merged);
+    });
+  }
+
+  /** Replace the whole transcript, for a caller that knows it holds every entry. */
   async save(entries: readonly AiConversationEntry[]): Promise<void> {
     const normalized = entries
       .map(normalizeEntry)
       .filter((entry): entry is AiConversationEntry => entry !== null)
       .slice(0, MAX_SAVED_EXCHANGES);
-    await this.store.set(CONVERSATION_KEY, normalized);
+    await this.withWriteLock(async () => {
+      await this.store.set(CONVERSATION_KEY, normalized);
+    });
   }
 
   async clear(): Promise<void> {
-    await this.store.remove(CONVERSATION_KEY);
+    await this.withWriteLock(async () => {
+      await this.store.remove(CONVERSATION_KEY);
+    });
+  }
+
+  private async withWriteLock<T>(work: () => Promise<T>): Promise<T> {
+    const previous = this.writeQueue;
+    const run = previous.then(work, work);
+    this.writeQueue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }
 }
 

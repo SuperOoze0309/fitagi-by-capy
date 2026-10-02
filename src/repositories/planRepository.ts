@@ -190,23 +190,68 @@ export class PlanRepository {
    * Exactly one plan is active: activating one deactivates the rest, here rather
    * than in the page, because "which plan am I on" has to have a single answer for
    * the Home card and the workout prefill to agree.
+   *
+   * The whole save is serialised. Two activations started in the same tick used to
+   * interleave — each read the list before the other had written, so both ended up
+   * active and `active()` then returned whichever came first in sort order.
    */
   async save(plan: TrainingPlan): Promise<TrainingPlan> {
-    const next: TrainingPlan = { ...plan, updatedAt: nowIso() };
-    if (next.active) {
-      for (const other of await this.collection.all()) {
-        if (other.id !== next.id && other.active) {
-          await this.collection.put({ ...other, active: false, updatedAt: nowIso() });
-        }
-      }
-    }
-    await this.collection.put(next);
-    return next;
+    return this.withWriteLock(async () => {
+      const next: TrainingPlan = { ...plan, updatedAt: nowIso() };
+      if (next.active) await this.standDownOthers(next.id);
+      await this.collection.put(next);
+      return next;
+    });
   }
 
+  /**
+   * Bulk write for a restore.
+   *
+   * This used to write straight through, which meant an imported backup could leave
+   * two plans active — the one invariant this type is supposed to hold. The last
+   * active plan in the file wins and the rest are stood down, because "exactly one"
+   * has to be true after a restore just as much as after a tap.
+   */
   async putMany(plans: TrainingPlan[]): Promise<void> {
-    await this.collection.putMany(plans);
+    if (plans.length === 0) return;
+    await this.withWriteLock(async () => {
+      const active = plans.filter((plan) => plan.active);
+      const normalised =
+        active.length > 1
+          ? plans.map((plan) => (plan === active[active.length - 1] ? plan : { ...plan, active: false }))
+          : plans;
+      await this.collection.putMany(normalised);
+      const winner = normalised.find((plan) => plan.active);
+      if (winner) await this.standDownOthers(winner.id);
+    });
   }
+
+  /** Turn off every other active plan, so only `keepId` remains on. */
+  private async standDownOthers(keepId: string): Promise<void> {
+    for (const other of await this.collection.all()) {
+      if (other.id !== keepId && other.active) {
+        await this.collection.put({ ...other, active: false, updatedAt: nowIso() });
+      }
+    }
+  }
+
+  /**
+   * Serialise plan writes.
+   *
+   * The tail is a caught promise so a failed save cannot poison the next one. Only
+   * plan writes go through here — reads stay lock-free.
+   */
+  private async withWriteLock<T>(work: () => Promise<T>): Promise<T> {
+    const previous = this.writeQueue;
+    const run = previous.then(work, work);
+    this.writeQueue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  private writeQueue: Promise<void> = Promise.resolve();
 
   async remove(id: string): Promise<void> {
     await this.collection.remove(id);

@@ -68,7 +68,7 @@ Gradle is provided by the wrapper; it downloads its distribution on first run.
 
 ```bash
 npm run verify         # lint + typecheck + test + production build
-npm run test           # 302 unit tests in 59 suites (node --test)
+npm run test           # 320 unit tests in 63 suites (node --test)
 npm run test:browser   # headless Chrome drives the real app at a phone and a desktop viewport
 ```
 
@@ -152,7 +152,7 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 ```bash
 npm run verify         # lint + typecheck + test + 生产构建
-npm run test           # 302 个单元测试，59 个测试套件（node --test）
+npm run test           # 320 个单元测试，63 个测试套件（node --test）
 npm run test:browser   # 无头 Chrome 在手机和桌面两种视口下驱动真实应用
 ```
 

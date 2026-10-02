@@ -142,3 +142,34 @@
   `StorageAdapter` 增加事务能力，那属于接口变更，建议单独排一项）
 - 已知风险：回滚本身失败时抛 `BackupRestoreError` 并在消息里说明，不会谎报成功；
   照片按 id 推导键名，若将来照片键规则改变需同步此处
+
+## 2026-10-01 · DS-08 + DS-16 + DS-22 + DS-10
+
+- 状态：已交待验收
+- 改动：
+  - **DS-08** `src/repositories/trainingRepository.ts`：`mutate()` 按 **workout id 串行**
+    （每次更新重新读取，所以能看到上一次写入的结果；不同训练互不阻塞；队列尾部是
+    catch 过的 Promise，一次失败不毒害后续）。`moveExercise` 对**不存在的动作 id** 改为
+    抛错（原来静默 no-op，调用方拿到"成功"却是空操作）
+  - **DS-16** `src/repositories/planRepository.ts`：`save()` 与 `putMany()` 统一走写锁，
+    `putMany` 补上「至多一个 active」——导入多 active 计划时**文件里最后一个 active 胜出**，
+    其余被停用（原来批量写完全绕过该约束）
+  - **DS-22** `src/repositories/aiConversationRepository.ts` + `src/pages/AiPage.tsx`：
+    新增 `append()`（读取失败或另一页面同时打开时，不再用本页快照覆盖未读到的历史），
+    页面改用 append；**历史读取失败不再等同于「没有历史」**——置 `historyFailed`，
+    阻止提问/总结并允许重试，输入框提示读取失败
+  - **DS-10** `src/services/ai/openaiProvider.ts`：实现从 `chatStream` 改名为 **`streamChat`**，
+    与接口和 `AiService` 的调用一致（此前可选属性让 TS 放行，流式**整条从未生效**）
+  - 新增测试：`src/test/concurrency.test.ts`（7 项：并发加动作、并发编辑+完成、不同训练互不阻塞、
+    失败后队列继续、真实 IndexedDB 下的并发）、`src/test/streaming.test.ts`（5 项：请求带
+    stream:true、逐片段回调、**响应未结束就收到第一段**、忽略 stream 的端点降级为单段、
+    真实 provider 暴露 `streamChat`）、`reminders.test.ts` 增 2 项计划唯一性、
+    `aiConversation.test.ts` 增 4 项 append 语义
+  - 六处测试计数 302 → 320 / 63 套件
+- 已自测：`npm test` **320 通过 / 63 套件 / 0 失败**；`npm run verify` exit 0；
+  浏览器冒烟手机 165 / 桌面 166，控制台零错误
+- 回归证明：把 `streamChat` 改回旧名字 `chatStream`，流式套件 4 项失败、1 项通过（走降级），
+  还原后 5 项全过——这条守卫确实能抓住改名
+- 没验证：真实端点的流式行为（仓库从未连过真实模型）；真机上的并发节奏
+- 已知风险：DS-08 的串行只在**同一仓储实例**内生效（应用只有一个实例，符合预期）；
+  DS-22 的 append 不去重历史中的旧重复行，只保证新写入不重复

@@ -62,6 +62,8 @@ export function AiPage() {
   const [busy, setBusy] = useState(false);
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [historyReady, setHistoryReady] = useState(false);
+  /** Set when the stored transcript could not be read; blocks asking until retried. */
+  const [historyFailed, setHistoryFailed] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
   const exchangesRef = useRef<Exchange[]>([]);
   const replaceExchanges = useCallback((next: Exchange[]) => {
@@ -74,23 +76,28 @@ export function AiPage() {
   const stickRef = useRef(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    void repositories()
-      .aiConversation.recent()
-      .then((saved) => {
-        if (!cancelled) replaceExchanges(saved);
-      })
-      .catch(() => {
-        if (!cancelled) toast.show(t('ai.memoryLoadFailed'), 'error');
-      })
-      .finally(() => {
-        if (!cancelled) setHistoryReady(true);
-      });
-    return () => {
-      cancelled = true;
-    };
+  const loadHistory = useCallback(async () => {
+    setHistoryFailed(false);
+    try {
+      const saved = await repositories().aiConversation.recent();
+      replaceExchanges(saved);
+    } catch {
+      /*
+       * "The read failed" is not "there is nothing stored". Treating them the same let
+       * a page with an unread history answer a question and then persist its own empty
+       * view over the real transcript, so the failure now blocks asking until it is
+       * resolved — and the retry is one tap.
+       */
+      setHistoryFailed(true);
+      toast.show(t('ai.memoryLoadFailed'), 'error');
+    } finally {
+      setHistoryReady(true);
+    }
   }, [replaceExchanges, t, toast]);
+
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
 
   const roleOptions: { value: AiRole; label: string }[] = [
     { value: 'recorder', label: t('ai.roleRecorder') },
@@ -127,7 +134,7 @@ export function AiPage() {
    */
   const ask = useCallback(async () => {
     const trimmed = question.trim();
-    if (trimmed === '' || busy || !historyReady) return;
+    if (trimmed === '' || busy || !historyReady || historyFailed) return;
     setBusy(true);
     setQuestion('');
     stickRef.current = true;
@@ -192,7 +199,7 @@ export function AiPage() {
       setBusy(false);
       inputRef.current?.focus();
     }
-  }, [ai, busy, historyReady, question, replaceExchanges, role, t, toast]);
+  }, [ai, busy, historyFailed, historyReady, question, replaceExchanges, role, t, toast]);
 
   /**
    * Summarise the assembled context, without a question.
@@ -202,7 +209,7 @@ export function AiPage() {
    * giving advice, and it shows exactly the same disclosure as a question does.
    */
   const summarize = useCallback(async () => {
-    if (busy || !historyReady) return;
+    if (busy || !historyReady || historyFailed) return;
     setBusy(true);
     stickRef.current = true;
 
@@ -259,7 +266,7 @@ export function AiPage() {
     } finally {
       setBusy(false);
     }
-  }, [ai, busy, historyReady, replaceExchanges, t, toast]);
+  }, [ai, busy, historyFailed, historyReady, replaceExchanges, t, toast]);
 
   const clearConversation = useCallback(async () => {
     replaceExchanges([]);
@@ -366,7 +373,7 @@ export function AiPage() {
                 <button
                   type="button"
                   className="btn btn-sm"
-                  disabled={busy || !historyReady}
+                  disabled={busy || !historyReady || historyFailed}
                   onClick={() => void summarize()}
                 >
                   {t('ai.summarise')}
@@ -423,7 +430,7 @@ export function AiPage() {
               <button
                 type="button"
                 className="btn btn-sm btn-ghost"
-                disabled={busy || !historyReady}
+                disabled={busy || !historyReady || historyFailed}
                 onClick={() => void clearConversation()}
               >
                 {t('common.clear')}
@@ -453,7 +460,7 @@ export function AiPage() {
                 id="ai-question"
                 ref={inputRef}
                 className="textarea chat-input"
-                placeholder={historyReady ? t('ai.askPlaceholder') : t('common.loading')}
+                placeholder={historyFailed ? t('ai.memoryLoadFailed') : historyReady ? t('ai.askPlaceholder') : t('common.loading')}
                 value={question}
                 rows={1}
                 onChange={(event) => setQuestion(event.target.value)}
@@ -467,7 +474,7 @@ export function AiPage() {
               <button
                 type="button"
                 className="btn btn-primary chat-send"
-                disabled={busy || !historyReady || question.trim() === ''}
+                disabled={busy || !historyReady || historyFailed || question.trim() === ''}
                 aria-label={t('ai.ask', { role: t(ROLE_KEYS[role]) })}
                 onClick={() => void ask()}
               >
@@ -506,7 +513,12 @@ async function saveConversation(
       createdAt: exchange.createdAt,
     }));
   try {
-    await repositories().aiConversation.save(entries);
+    /*
+     * Append, never replace. A snapshot save wrote whatever this page happened to be
+     * holding over the stored transcript, so a second page, a failed read, or a clear
+     * during a slow answer could erase exchanges this page had never seen.
+     */
+    await repositories().aiConversation.append(entries);
   } catch {
     toast.show(t('ai.memorySaveFailed'), 'error');
   }

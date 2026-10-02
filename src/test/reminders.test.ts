@@ -269,6 +269,47 @@ describe('reminder and plan records', () => {
     assert.equal((await repos.plans.get(first.id))?.active, false, 'the older one was stood down');
   });
 
+  it('keeps exactly one active plan when two are activated at the same time', async () => {
+    // Each activation reads the list before the other writes, so without a lock both
+    // end up active and "which plan am I on" stops having an answer.
+    const [first, second] = await Promise.all([
+      repos.plans.save({ ...createEmptyPlan(), name: 'A', active: true }),
+      repos.plans.save({ ...createEmptyPlan(), name: 'B', active: true }),
+    ]);
+
+    const all = await repos.plans.all();
+    assert.equal(
+      all.filter((plan) => plan.active).length,
+      1,
+      'concurrent activations must still leave exactly one active plan',
+    );
+    const active = await repos.plans.active();
+    assert.ok(active, 'there is still a current plan');
+    assert.ok(
+      [first.id, second.id].includes(active.id),
+      'and it is one of the two that were activated',
+    );
+  });
+
+  it('keeps exactly one active plan when an import carries several', async () => {
+    // A file exported from a device where the invariant somehow did not hold, or one
+    // edited by hand. Bulk writes used to bypass the rule entirely.
+    const a = { ...createEmptyPlan(), id: 'plan-a', name: 'A', active: true };
+    const b = { ...createEmptyPlan(), id: 'plan-b', name: 'B', active: false };
+    const c = { ...createEmptyPlan(), id: 'plan-c', name: 'C', active: true };
+
+    await repos.plans.putMany([a, b, c]);
+
+    const all = await repos.plans.all();
+    assert.equal(all.length, 3, 'every plan in the file is stored');
+    assert.deepEqual(
+      all.filter((plan) => plan.active).map((plan) => plan.id),
+      ['plan-c'],
+      'the last active plan in the file wins, the others are stood down',
+    );
+    assert.equal((await repos.plans.active())?.id, 'plan-c');
+  });
+
   it('counts the work in a plan', () => {
     const plan = createEmptyPlan();
     plan.days[1] = createEmptyPlanDay(1, {
