@@ -117,12 +117,15 @@ describe('context builder', () => {
   });
 
   it('summarises the last 7 days without sending every workout', async () => {
-    const recent = new Date(Date.now() - 2 * 86_400_000).toISOString();
-    const old = new Date(Date.now() - 40 * 86_400_000).toISOString();
+    // Fixed Wednesday reference: two days ago belongs to this calendar week
+    // regardless of the runner's timezone or the day this test is executed.
+    const now = new Date(2026, 0, 7, 12);
+    const recent = new Date(now.getTime() - 2 * 86_400_000).toISOString();
+    const old = new Date(now.getTime() - 40 * 86_400_000).toISOString();
     await record(repos, 'Row', [{ weight: 50, reps: 10 }], recent);
     await record(repos, 'Deadlift', [{ weight: 150, reps: 3 }], old);
 
-    const context = await builder.build({ includeWeekly: true });
+    const context = await builder.build({ includeWeekly: true, now });
     assert.match(context.text, /## Last 7 days/);
     assert.match(context.text, /Row/);
     assert.ok(!context.text.includes('Deadlift'), 'an old session is not in the 7-day window');
@@ -140,14 +143,15 @@ describe('context builder', () => {
     // A session inside the CURRENT week, so the weekly summary keyed by this week's
     // Monday actually contains it. (A session from last week is correctly excluded
     // from this week's summary, and would only be summarised by its own week.)
-    const monday = new Date(`${weekKey(new Date())}T09:00:00`);
+    const now = new Date(2026, 0, 7, 12);
+    const monday = new Date(`${weekKey(now)}T09:00:00`);
     await record(repos, 'Row', [{ weight: 50, reps: 10 }], monday.toISOString());
 
     const service = new SummaryService(repos);
-    await service.refreshForDate(new Date(), 'kg');
-    assert.ok(await repos.summaries.get('weekly', weekKey(new Date())), 'weekly summary stored');
+    await service.refreshForDate(now, 'kg');
+    assert.ok(await repos.summaries.get('weekly', weekKey(now)), 'weekly summary stored');
 
-    const context = await builder.build({ includeWeekly: true });
+    const context = await builder.build({ includeWeekly: true, now });
     assert.ok(
       context.sections.includes('weeklySaved'),
       `sections: ${context.sections.join(', ')}`,
