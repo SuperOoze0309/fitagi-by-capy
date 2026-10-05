@@ -1,5 +1,15 @@
 apply plugin: 'com.android.application'
 
+// Release signing. The key and its passwords live in android/keystore.properties and the
+// keystore file it points at; both are git-ignored and never committed. Without that file
+// `assembleRelease` still succeeds but produces an unsigned APK, which is what CI and a
+// fresh clone get. See docs/DEVELOPING.md ("Building a release APK").
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
 android {
     namespace "app.fitnessagent.tracker"
     compileSdk rootProject.ext.compileSdkVersion
@@ -7,8 +17,12 @@ android {
         applicationId "app.fitnessagent.tracker"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Keep versionName equal to "version" in package.json and APP_VERSION in
+        // src/domain/types.ts (src/test/release.test.ts checks all of them), and raise
+        // versionCode by one on every published APK: Android refuses to install a lower one
+        // over a higher one.
+        versionCode 2
+        versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +30,21 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

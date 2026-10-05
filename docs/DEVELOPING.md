@@ -38,6 +38,7 @@ reload, no restart. The default theme is `ragdoll`.
 | `verify` | lint + typecheck + test + build — run this before opening a pull request |
 | `cap:sync` / `cap:copy` | Copy web assets and plugins into the Android project |
 | `android:apk` | build + `cap sync` + `gradlew assembleDebug` |
+| `android:release` | build + `cap sync` + `gradlew assembleRelease` (signed when `android/keystore.properties` exists) |
 
 ## Building the Android APK
 
@@ -64,11 +65,38 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 Requirements: JDK 17+ (21 verified) and the Android SDK with **platform 35** and build-tools.
 Gradle is provided by the wrapper; it downloads its distribution on first run.
 
+### Building a release APK
+
+```bash
+npm run android:release    # build the web assets, sync Capacitor, assemble a release APK
+```
+
+The APK lands in `android/app/build/outputs/apk/release/`. It is signed only when
+`android/keystore.properties` exists:
+
+```properties
+storeFile=fitagi-release.keystore    # relative to android/
+storePassword=...
+keyAlias=fitagi-release
+keyPassword=...
+```
+
+Both that file and the keystore are git-ignored and must never be committed. Without them the build
+still succeeds and writes `app-release-unsigned.apk`, which Android refuses to install — that is what
+CI and a fresh clone get. The published APKs from 1.0.0 on are signed with the maintainer's release
+key; an APK signed with any other key installs as a different signer and cannot update them. If that
+key is lost, no later APK can update an installed copy.
+
+Before publishing: raise `versionCode` in `android/app/build.gradle` by one, and keep `versionName`
+equal to `version` in `package.json` and `APP_VERSION` in `src/domain/types.ts`.
+`src/test/release.test.ts` fails when they disagree. WebView inspection (`chrome://inspect`) is
+available in debug builds only; `capacitor.config.ts` deliberately does not force it on.
+
 ## Verify
 
 ```bash
 npm run verify         # lint + typecheck + test + production build
-npm run test           # 358 unit tests in 71 suites (node --test)
+npm run test           # 361 unit tests in 72 suites (node --test)
 npm run test:browser   # headless Chrome drives the real app at a phone and a desktop viewport
 ```
 
@@ -123,6 +151,7 @@ npm run dev          # http://localhost:5173
 | `verify` | lint + typecheck + test + build —— 提交 pull request 前先跑这个 |
 | `cap:sync` / `cap:copy` | 把 Web 资源和插件复制进 Android 工程 |
 | `android:apk` | build + `cap sync` + `gradlew assembleDebug` |
+| `android:release` | build + `cap sync` + `gradlew assembleRelease`（存在 `android/keystore.properties` 时签名） |
 
 ### 构建 Android APK
 
@@ -148,11 +177,30 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 环境要求：JDK 17+（已在 21 上验证），以及带 **platform 35** 和 build-tools 的 Android SDK。Gradle 由 wrapper 提供，首次运行时会自行下载。
 
+#### 构建 release APK
+
+```bash
+npm run android:release    # 构建 Web 资源、同步 Capacitor、打包 release APK
+```
+
+APK 输出在 `android/app/build/outputs/apk/release/`。只有存在 `android/keystore.properties` 时才会签名：
+
+```properties
+storeFile=fitagi-release.keystore    # 相对于 android/
+storePassword=...
+keyAlias=fitagi-release
+keyPassword=...
+```
+
+这个文件和密钥库都已被 Git 忽略，绝不能提交。没有它们时构建仍会成功，但产物是 `app-release-unsigned.apk`，Android 拒绝安装——CI 和全新克隆得到的就是这个。从 1.0.0 起，发布的 APK 使用维护者的正式密钥签名；用其他密钥签名的 APK 属于不同签名者，无法覆盖升级。密钥一旦丢失，之后的任何 APK 都无法升级已安装的应用。
+
+发布前：把 `android/app/build.gradle` 里的 `versionCode` 加一，并让 `versionName` 与 `package.json` 的 `version`、`src/domain/types.ts` 的 `APP_VERSION` 保持一致；三者不一致时 `src/test/release.test.ts` 会失败。WebView 调试（`chrome://inspect`）只在 debug 构建中可用，`capacitor.config.ts` 有意不强制开启。
+
 ### 验证
 
 ```bash
 npm run verify         # lint + typecheck + test + 生产构建
-npm run test           # 358 个单元测试，71 个测试套件（node --test）
+npm run test           # 361 个单元测试，72 个测试套件（node --test）
 npm run test:browser   # 无头 Chrome 在手机和桌面两种视口下驱动真实应用
 ```
 

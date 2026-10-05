@@ -10,7 +10,7 @@ export type WeightUnit = 'kg' | 'lb';
 export type DistanceUnit = 'm' | 'km' | 'mi';
 
 /** Shown on the About screen and stamped into every backup file. */
-export const APP_VERSION = '0.9.0';
+export const APP_VERSION = '1.0.0';
 
 /** ISO-8601 UTC timestamp, e.g. 2026-02-14T09:31:00.000Z */
 export type IsoTimestamp = string;

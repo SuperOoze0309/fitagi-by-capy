@@ -11,8 +11,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and the proj
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-10-05
+
+The first release build. **It cannot be installed over 0.9.0**: 0.9.0 was signed with a debug key and
+1.0.0 is signed with the project's release key, so Android treats them as different signers. Export a
+JSON backup in 0.9.0, uninstall it, install 1.0.0 and restore. The API key, meal photos and chat
+history are not in a backup. The APK has still not been run on a real device or an emulator.
+第一个 release 构建。**无法覆盖安装在 0.9.0 之上**：0.9.0 使用调试密钥签名，1.0.0 使用项目正式密钥签名，
+Android 视为不同签名者。请在 0.9.0 中导出 JSON 备份，卸载后安装 1.0.0 再恢复。API Key、饮食照片和聊天记录
+不在备份中。APK 仍未在真机或模拟器上运行过。
+
 ### Added / 新增
 
+- **Signed release build.** `npm run android:release` assembles a release APK, signed from a
+  git-ignored `android/keystore.properties`. Without that file the build produces an unsigned APK.
+  **已签名的 release 构建。** `npm run android:release` 打包 release APK，签名信息来自已被 Git 忽略的
+  `android/keystore.properties`；没有该文件时产出未签名 APK。
 - **Cancellable chat.** Stop generation, abort on leaving the page, retry failed history loading,
   and show context disclosures in the selected language. Partial answers stay out of memory.
   **可取消的聊天。** 支持停止生成、离开页面取消、历史读取失败重试，上下文说明跟随界面语言；未完成回答不保存。
@@ -27,6 +41,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and the proj
 
 ### Changed / 变更
 
+- **Android version metadata.** The APK now reports 1.0.0 (`versionCode` 2). The 0.9.0 APK reported
+  "1.0" to Android while the app showed 0.9.0, and the lockfile still said 0.8.0; a test now keeps
+  the four places in step.
+  **Android 版本信息。** APK 现在向系统报告 1.0.0（`versionCode` 2）。0.9.0 的 APK 向系统报告的是 "1.0"，
+  应用内显示 0.9.0，lockfile 还停在 0.8.0；新增测试让这四处保持一致。
 - **Request and storage reliability.** SSE supports LF/CRLF/CR, split UTF-8 and terminal DONE;
   model calls have a total deadline. IndexedDB operations abort on timeout, blocked deletion waits
   for completion, and stale reads cannot replace a newer cache.
@@ -40,6 +59,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and the proj
   from hypothetical progression targets. Exact targets must be grounded in a relevant training
   baseline; injury concerns receive no diagnosis or rehabilitation prescription.
   **教练建议边界更清楚。** 回答跟随用户语言，并将训练记录与假设性进阶目标分开。具体目标必须有相关训练记录作依据；遇到伤痛疑虑不做诊断或康复处方。
+
+### Fixed / 修复
+
+- **WebView inspection is off in release builds.** `capacitor.config.ts` forced
+  `webContentsDebuggingEnabled` on for every build, so a release APK would have
+  been open to `chrome://inspect` over USB, exposing the local database and the stored API key. The setting is
+  removed; Capacitor now enables inspection for debug builds only.
+  **release 构建关闭 WebView 调试。** `capacitor.config.ts` 之前对所有构建强制开启
+  `webContentsDebuggingEnabled`，release APK 也会允许通过 USB 在 `chrome://inspect` 中打开，暴露本地数据库和
+  已保存的 API Key。现已移除该设置，Capacitor 只在 debug 构建中开启调试。
 
 ## [0.9.0] — 2026-09-25
 

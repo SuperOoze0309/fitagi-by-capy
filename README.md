@@ -3,9 +3,9 @@
 # FitAGI by Capy
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.9.0-informational.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.0.0-informational.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Android%206.0%2B-3ddc84.svg)](#supported-devices)
-[![Tests](https://img.shields.io/badge/tests-358%20passing-brightgreen.svg)](docs/DEVELOPING.md#verify)
+[![Tests](https://img.shields.io/badge/tests-361%20passing-brightgreen.svg)](docs/DEVELOPING.md#verify)
 
 A free, open-source, local-first workout and meal tracker for Android. The mascot is a ragdoll cat,
 drawn in code rather than shipped as an image.
@@ -16,7 +16,7 @@ drawn in code rather than shipped as an image.
   adds convenience on top.
 
 The recording experience aims to feel like *notes + a training log*: open it, log a set, close it.
-It is **feature complete for the planned scope** (0.9.0): manual logging, local persistence, History,
+It is **feature complete for the planned scope** (1.0.0): manual logging, local persistence, History,
 Exercise history with progress charts, kg/lb, a meal log with optional photo analysis, reminders as
 local notifications, weekly training plans, an optional local-only profile, four colour themes with
 hand-drawn pixel mascots and matching scenery, a complete interface translation (Simplified Chinese,
@@ -32,10 +32,17 @@ optional OpenAI-compatible AI layer.
 
 ## Get the APK
 
-Download `FitAGI-by-Capy-0.9.0-debug.apk` from the
+Download `FitAGI-by-Capy-1.0.0.apk` from the
 [latest release](https://github.com/SuperOoze0309/fitagi-by-capy/releases/latest), copy it to the phone
-and open it — you will need to allow installing from unknown sources, because the APK is signed with
-the Android debug key rather than a Play key. `adb install -r FitAGI-by-Capy-0.9.0-debug.apk` works too.
+and open it — you will need to allow installing from unknown sources, because the APK is distributed
+here rather than through Google Play. `adb install FitAGI-by-Capy-1.0.0.apk` works too.
+
+From 1.0.0 the APK is a release build signed with the project's own release key; 0.9.0 was a debug
+build signed with a debug key. **Android will not install 1.0.0 over 0.9.0**, because the signature
+changed. To move across: in 0.9.0 open *Backup & restore* and export a JSON backup, uninstall 0.9.0,
+install 1.0.0, then restore the backup. The API key, meal photos and AI chat history are not part of a
+backup and do not carry over. Later versions signed with the same key update in place. This path has
+not been walked on a real device either — see [Known limits](#known-limits).
 
 What the APK does, in one breath: it logs your workouts set by set, keeps a meal log with optional photo
 analysis, shows progress charts, schedules reminders as local notifications, holds your weekly training
@@ -506,7 +513,7 @@ The two rules that matter most:
    by an older version still imports. The frozen identifiers listed above exist for that reason — do
    not rename them.
 
-Run `npm run verify` before opening a pull request: lint, typecheck, 358 unit tests and a production
+Run `npm run verify` before opening a pull request: lint, typecheck, 361 unit tests and a production
 build. [`docs/DEVELOPING.md`](docs/DEVELOPING.md) has the rest, including the browser suite that drives
 the real app in headless Chrome at two viewports.
 

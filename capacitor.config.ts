@@ -8,7 +8,10 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   android: {
     allowMixedContent: false,
-    webContentsDebuggingEnabled: true,
+    // `webContentsDebuggingEnabled` is deliberately not set. Left out, Capacitor turns
+    // WebView inspection on for debuggable builds only; forcing it to `true` would let
+    // anyone with a USB cable open chrome://inspect on a release APK and read the local
+    // database and the stored API key.
   },
   plugins: {
     // Placeholder: the SQLite plugin is added in the Android storage step.

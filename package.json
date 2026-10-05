@@ -1,7 +1,7 @@
 {
   "name": "fitagi-by-capy",
   "private": true,
-  "version": "0.9.0",
+  "version": "1.0.0",
   "description": "FitAGI by Capy - local-first, open-source workout and meal tracker for Android. No account, no server, offline by default.",
   "license": "MIT",
   "type": "module",
@@ -16,7 +16,8 @@
     "verify": "npm run lint && npm run typecheck && npm run test && npm run build",
     "cap:sync": "cap sync android",
     "cap:copy": "cap copy android",
-    "android:apk": "npm run build && cap sync android && cd android && gradlew.bat assembleDebug"
+    "android:apk": "npm run build && cap sync android && cd android && gradlew.bat assembleDebug",
+    "android:release": "npm run build && cap sync android && cd android && gradlew.bat assembleRelease"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^7.0.3",

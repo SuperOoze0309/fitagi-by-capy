@@ -88,7 +88,7 @@
 
 - 包管理：`npm`。常用命令：`npm run dev` / `build` / `test` / `test:browser` / `typecheck` /
   `lint` / `verify` / `cap:sync` / `android:apk`。
-- 单元测试：`node --test --experimental-transform-types`，目前 **358 个测试、71 个套件**。
+- 单元测试：`node --test --experimental-transform-types`，目前 **361 个测试、72 个套件**。
   这个数字写在 README（中英）、`docs/DEVELOPING.md`（中英）和 `docs/ARCHITECTURE.md`（中英）
   六处，**改动测试数量后要一起更新**，否则文档立刻过期（已经发生过一次）。
 - 浏览器冒烟：`scripts/smoke.ps1` 拉起 Vite（端口 **5199**，`--strictPort`）后跑两遍

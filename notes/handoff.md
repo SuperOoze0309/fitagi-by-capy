@@ -241,3 +241,50 @@
 - 没验证：仅文档变更，未运行产品测试、构建或浏览器检查；未新增真机、原生和真实模型验证。358 项等数字引用上一轮结果。
 - 需要对方：无；后续新增功能时更新对应段落。
 - 已知风险：中文版本按中文阅读习惯重组，与英文版本不逐段对齐；旧版本 APK 不保证包含仓库最新功能，下载段已说明。
+
+## 2026-10-05 · Claude 发布 1.0.0：调试、正式签名、release APK
+
+- 状态：已交（用户本轮授权直接调试、打包、提交并 push）。写者：Claude（Cowork）。本轮写锁已解除。
+- 改动：
+  - `capacitor.config.ts`：移除 `webContentsDebuggingEnabled: true`。显式开启会让 release APK 也能被
+    `chrome://inspect` 打开，暴露本地数据库和已保存的 API Key；不写该键时 Capacitor 只在可调试构建中开启
+    （已对照 `CapConfig.java` 的默认值确认）。
+  - `package.json` / `package-lock.json` / `src/domain/types.ts` / `android/app/build.gradle`：版本统一为
+    **1.0.0**，`versionCode` 1 → 2。此前四处并不一致：lockfile 是 0.8.0，Android `versionName` 是 "1.0"，
+    其余是 0.9.0。
+  - `android/app/build.gradle`：新增 release `signingConfig`，从 `android/keystore.properties` 读取；该文件
+    不存在时照常构建，产出未签名 APK（CI 与全新克隆的情况）。
+  - `.gitignore`：忽略 `android/keystore.properties` 和 `*.jks`（`*.keystore` 原本已忽略）。
+  - `package.json`：新增 `android:release` 脚本。
+  - `src/test/release.test.ts`（新增 3 项 / 1 套件）：四处版本一致且 `versionCode` ≥ 2；配置不强制开启
+    WebView 调试；Android 包名仍是冻结值。
+  - README 中英、`docs/DEVELOPING.md` 中英、`docs/ARCHITECTURE*.md`、`notes/README.md`、`CHANGELOG.md`：
+    版本、下载与升级说明、release 构建步骤；测试计数 358 / 71 → **361 / 72**。
+  - 工作区（不在 Git 中）：新建 `android/fitagi-release.keystore` 与 `android/keystore.properties`；
+    按用户要求删除未跟踪的 `artifacts/`（宣传视频素材，约 174 MB，933 个文件）。
+- 已自测（均在 Linux 云端克隆上，Node 22.22，基线 `b920338`）：
+  - 改动前 `npm run verify` exit 0：358 / 71 全通过，lint 0 error、2 条既有 warning。
+  - 改动后 `npm run verify` exit 0：**361 / 72 全通过**，lint 同上，typecheck 与生产构建通过。
+  - 浏览器冒烟：用 `scripts/smoke.ps1` 的 Linux 等价脚本（同一 `cdp-check.mjs`、同样的浏览器参数与通过
+    条件，Chromium 无头）跑两种视口，**手机 181 / 桌面 182 全通过，note=done，驱动 exit 0**。驱动的
+    `pageErrors` 里有若干条 `net::ERR_ABORTED (Script)`（页面重载时被取消的脚本请求）；同一脚本在未改动的
+    `b920338` 上同样出现，且每次落在不同视口，判断为该环境下的时序现象，与本轮改动无关。**没有**在 Windows
+    上运行 `npm run test:browser` 本身。
+  - `gradlew clean assembleRelease`（JDK 21、platform 35、build-tools 35.0.0）BUILD SUCCESSFUL，
+    `lintVitalRelease` 通过。
+  - APK 校验：`apksigner verify` 通过（v1 + v2）；证书 SHA-256
+    `9f65764edc36868eb7e65664034b666bbf07bec028deca6070c222448712abf0`，与新建密钥一致；
+    `aapt2 dump badging` 显示 `app.fitnessagent.tracker`、`versionCode=2`、`versionName=1.0.0`、无
+    `application-debuggable`；`zipalign -c` 通过；包内 `capacitor.config.json` 不含调试开关。
+    APK SHA-256 `9e4910038c8e19c30d7832c1b415a4bf8b9a7bb504c69a0e54ff11b0e7de9d27`，26,998,396 字节。
+- 没验证：**APK 仍未在任何真机或模拟器上安装或启动**（云端没有 KVM，跑不了模拟器）；release 构建下的
+  SQLite 冷启动与迁移、通知、分享/文件选择器、相机、状态栏与返回键；真实模型端点；从 0.9.0 导出备份 →
+  卸载 → 安装 1.0.0 → 恢复这条升级路径。真话清单全部继续适用，版本号是 1.0.0 不改变其中任何一条。
+- 需要对方：在真机上装一次 1.0.0 并走一遍升级路径；之后从 `notes/debug-2026-10-04.md` 的剩余项接手
+  （DS-02、DS-05 / 06、DS-09 本轮均未触碰）。
+- 已知风险：
+  - **1.0.0 不能覆盖安装在 0.9.0 上**（签名从调试密钥换成正式密钥）。已安装 0.9.0 的用户必须先导出 JSON
+    备份再卸载重装；API Key、饮食照片、聊天记录不在备份中，会丢失。而原生导出本身尚未在真机验证过。
+  - 密钥库和密码只存在于维护者电脑的 `android/` 目录下，未进 Git，也没有其他副本。丢失后任何新 APK 都
+    无法升级已安装的 1.0.0。请尽快另行备份。
+  - release 构建未开启混淆（`minifyEnabled false`），与 0.9.0 的 debug 构建行为最接近，但两者并不等同。

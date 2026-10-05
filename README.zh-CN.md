@@ -3,9 +3,9 @@
 # FitAGI by Capy
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.9.0-informational.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.0.0-informational.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Android%206.0%2B-3ddc84.svg)](#支持的设备)
-[![Tests](https://img.shields.io/badge/tests-358%20passing-brightgreen.svg)](docs/DEVELOPING.md#验证)
+[![Tests](https://img.shields.io/badge/tests-361%20passing-brightgreen.svg)](docs/DEVELOPING.md#验证)
 
 FitAGI by Capy 是一款免费、开源的健身记录应用，支持训练、饮食、计划和提醒。主要面向 Android，也可以在浏览器中运行。
 
@@ -17,7 +17,9 @@ FitAGI by Capy 是一款免费、开源的健身记录应用，支持训练、�
 
 ## 下载 APK
 
-在 [GitHub Releases](https://github.com/SuperOoze0309/fitagi-by-capy/releases/latest) 下载 APK，传到 Android 设备后打开安装。当前发布包使用调试签名，安装时可能需要允许对应应用安装未知来源的应用。
+在 [GitHub Releases](https://github.com/SuperOoze0309/fitagi-by-capy/releases/latest) 下载 `FitAGI-by-Capy-1.0.0.apk`，传到 Android 设备后打开安装。应用不经由应用商店分发，安装时可能需要允许对应应用安装未知来源的应用。
+
+从 1.0.0 起，发布包是使用项目正式密钥签名的 release 构建；0.9.0 是调试签名的 debug 构建。**由于签名不同，1.0.0 无法直接覆盖安装在 0.9.0 之上。** 升级步骤：在 0.9.0 的“备份与恢复”中导出 JSON 备份，卸载 0.9.0，安装 1.0.0，再恢复备份。API Key、饮食照片和聊天记录不包含在备份中，不会随之迁移。此后使用同一密钥签名的版本可以直接覆盖升级。这一升级流程同样尚未在真机上验证，见[已知限制](#已知限制)。
 
 发布包与仓库最新代码可能存在差异。各版本的变化见 [更新记录](CHANGELOG.md)，从源码构建的方法见 [开发指南](docs/DEVELOPING.md#中文)。
 
@@ -164,7 +166,7 @@ API Key 保存在本机，不写入备份。饮食照片和聊天记录同样不
 
 从源码运行、构建 APK 和执行检查的方法见 [开发指南](docs/DEVELOPING.md#中文)。
 
-提交改动前请运行 `npm run verify`，包含代码规范、类型检查、单元测试和生产构建。当前测试规模为 **358 项、71 个套件**；浏览器检查覆盖手机和桌面两种视口。测试和浏览器检查请依次运行。
+提交改动前请运行 `npm run verify`，包含代码规范、类型检查、单元测试和生产构建。当前测试规模为 **361 项、72 个套件**；浏览器检查覆盖手机和桌面两种视口。测试和浏览器检查请依次运行。
 
 贡献时请注意：
 

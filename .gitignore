@@ -9,7 +9,10 @@ dist-ssr
 *.apk
 *.aab
 *.keystore
+*.jks
 !android/app/debug.keystore
+# Release signing: the key and its passwords stay on the maintainer's machine.
+android/keystore.properties
 
 # Editors and OS
 .DS_Store
