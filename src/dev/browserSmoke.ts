@@ -10,6 +10,7 @@ import { workoutVolumeKg } from '../domain/metrics';
 import { getStorage } from '../storage';
 import { localDateKey } from '../domain/datetime';
 import { weekKey } from '../services/summaries/buildSummary';
+import { SummaryService } from '../services/summaries/summaryService';
 import { buildExport } from '../services/export/exportService';
 import { saveTextFile } from '../services/fileTransfer';
 import { createEmptyMeal } from '../repositories/mealRepository';
@@ -471,7 +472,7 @@ async function pass3Body(check: (name: string, ok: boolean, detail?: string) => 
   // Typing multibyte text through the debug protocol is unreliable, so the UI path
   // is exercised with ASCII input. The parser itself is covered for Chinese input
   // ("卧推 60kg 8次 4组 最后一组力竭") by the unit tests.
-  const typed = setReactTextareaValue('quick-input', 'bench 60kg 8 8 8 8 last set failure');
+  const typed = setReactTextareaValue('quick-input', 'bench 60kg 8 8 8 8 last set failure rir2');
   check('quick log accepts input', typed);
   await tick(60);
   clickByText('button', 'Parse');
@@ -505,6 +506,11 @@ async function pass3Body(check: (name: string, ok: boolean, detail?: string) => 
   );
 
   // Confirm, which is the only path that writes.
+  // "last set" scopes the parsed RIR and failure flag to set 4.
+  const rirInput = document.querySelector<HTMLInputElement>('#root input[aria-label="Set 4 RIR"]');
+  check('Quick Log preserves and allows editing the parsed RIR', rirInput?.value === '2'
+    && setReactInputValueByElement(rirInput, '3'));
+  await tick(100);
   const confirmClicked = clickByTextStartingWith('button', 'Confirm and save');
   const saved = await waitForText('Workout', 6000);
   check('confirm button is present and clickable', confirmClicked);
@@ -534,6 +540,7 @@ async function pass3Body(check: (name: string, ok: boolean, detail?: string) => 
     created?.exercises[0]?.sets[3]?.isFailure === true,
   );
   check('the weight reached storage', created?.exercises[0]?.sets[0]?.weightKg === 60);
+  check('the edited RIR reaches storage', created?.exercises[0]?.sets[3]?.rir === 3);
   check(
     'only the last set is marked as failure',
     created?.exercises[0]?.sets.filter((set) => set.isFailure).length === 1,
@@ -686,6 +693,8 @@ async function pass3Body(check: (name: string, ok: boolean, detail?: string) => 
 
   // 12. The AI page: a conversation with the composer docked under it.
   await runChatLayoutChecks(check);
+  await runChatRequestChecks(check);
+  await runQuickLogNavigationChecks(check);
 
   // 13. Language and theme switching, in both directions, with no reload.
   await runLocaleChecks(check);
@@ -920,6 +929,113 @@ async function runChatLayoutChecks(check: (name: string, ok: boolean, detail?: s
  * loading state rather than as an obvious failure. Waiting is also what makes the next
  * failing check meaningful: if the app never becomes ready, that is the finding.
  */
+/** Real React events and navigation, with no request allowed to leave this smoke run. */
+async function runChatRequestChecks(check: (name: string, ok: boolean, detail?: string) => void) {
+  const conversation = repositories().aiConversation;
+  const originalFetch = window.fetch;
+  const originalRecent = conversation.recent.bind(conversation);
+  let calls = 0;
+  const signals: (AbortSignal | null | undefined)[] = [];
+  let finishLate: (() => void) | undefined;
+  window.fetch = (async (_input, options) => {
+    calls += 1;
+    signals.push(options?.signal);
+    if (calls === 2) {
+      return new Promise<Response>((resolve) => {
+        finishLate = () => resolve(new Response(JSON.stringify({ choices: [{ message: { content: 'LATE_ANSWER' } }] }),
+          { headers: { 'content-type': 'application/json' } }));
+      });
+    }
+    return new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"SMOKE_PARTIAL"}}]}\r\n\r\n'));
+      },
+    }), { headers: { 'content-type': 'text/event-stream' } });
+  }) as typeof fetch;
+  try {
+    await conversation.save([{ id: 'smoke-old-chat', role: 'coach', question: 'Earlier question', answer: 'Earlier answer',
+      contextSections: ['current workout'], contextCharacters: 25, createdAt: new Date().toISOString() }]);
+    await goTo('/');
+    let failReads = true;
+    conversation.recent = async () => {
+      if (failReads) throw new Error('SMOKE_HISTORY_READ_FAILURE');
+      return originalRecent();
+    };
+    await goTo('/ai');
+    const retryShown = await waitUntil(() => findButton('Retry loading') !== null, 5000);
+    check('history failure offers a working retry', retryShown);
+    failReads = false;
+    clickByText('button', 'Retry loading');
+    const ready = await waitUntil(() => document.querySelector<HTMLButtonElement>('.chat-send')?.disabled === false
+      || appText().includes('Earlier answer'), 5000);
+    check('retry reads the original chat without replacing it', ready && appText().includes('Earlier answer'));
+    const disclosure = document.querySelector<HTMLDetailsElement>('.chat-context');
+    if (disclosure) disclosure.open = true;
+    check('legacy context labels remain readable', appText().includes('Current workout'));
+
+    setReactTextareaValue('ai-question', '中文输入确认');
+    await tick(100);
+    const input = document.getElementById('ai-question');
+    input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }));
+    input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true }));
+    await tick(100);
+    check('IME confirmation and Shift Enter do not send a request', calls === 0);
+    input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const streamed = await waitForText('SMOKE_PARTIAL', 5000);
+    check('plain Enter streams an answer through the real page', streamed && Number(calls) === 1);
+    check('a busy chat offers Stop generating', clickByAriaLabel('Stop generating'));
+    const stopped = await waitUntil(() => signals[0]?.aborted === true, 3000);
+    check('Stop aborts the request and excludes the partial answer from memory', stopped && (await originalRecent()).length === 1);
+
+    setReactTextareaValue('ai-question', 'Slow follow-up');
+    await tick(100);
+    document.getElementById('ai-question')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await waitUntil(() => Number(calls) === 2, 5000);
+    await goTo('/');
+    check('leaving the AI page aborts an outstanding request', signals[1]?.aborted === true);
+    await goTo('/ai');
+    await waitForText('Earlier answer', 5000);
+    check('the reopened page can clear its history', clickByText('button', 'Clear'));
+    await waitUntil(async () => (await originalRecent()).length === 0, 5000);
+    finishLate?.();
+    await tick(150);
+    check('a late response cannot resurrect cleared history', (await originalRecent()).length === 0 && !appText().includes('LATE_ANSWER'));
+  } finally {
+    window.fetch = originalFetch;
+    conversation.recent = originalRecent;
+    finishLate?.();
+  }
+}
+
+async function runQuickLogNavigationChecks(check: (name: string, ok: boolean, detail?: string) => void) {
+  const original = SummaryService.prototype.refreshForWorkout;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  let finished = false;
+  SummaryService.prototype.refreshForWorkout = async function (...args) {
+    await gate;
+    try { return await original.apply(this, args); } finally { finished = true; }
+  };
+  try {
+    const before = await repositories().training.count();
+    await goTo('/quick-log');
+    await waitUntil(() => document.getElementById('quick-input') !== null, 5000);
+    setReactTextareaValue('quick-input', 'Slow summary navigation regression');
+    await tick(80);
+    check('a note can save while summary generation is delayed', clickByText('button', translate('en', 'quickLog.saveAsNote')));
+    check('the workout is stored before the delayed summary finishes', await waitForCount(before + 1, 5000) === before + 1);
+    await goTo('/meals');
+    check('navigation remains available while a summary is running', await waitForText('Meals', 5000));
+    release();
+    await waitUntil(() => finished, 5000);
+    await tick(100);
+    check('a completed background save does not pull the user back to a previous page', window.location.hash === '#/meals');
+  } finally {
+    release();
+    SummaryService.prototype.refreshForWorkout = original;
+  }
+}
+
 async function appReady(check: (name: string, ok: boolean, detail?: string) => void) {
   const ready = await waitUntil(
     () =>

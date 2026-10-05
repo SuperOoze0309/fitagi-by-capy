@@ -268,6 +268,7 @@ export const es: Messages = {
   },
 
   quickLog: {
+    setRirLabel: "RIR de la serie {index}",
     title: 'Registro rápido',
     aiOn: 'IA activada · {target}',
     offlineParser: 'Analizador local · IA desactivada',
@@ -322,6 +323,19 @@ export const es: Messages = {
   },
 
   ai: {
+    stop: "Detener respuesta",
+    stopped: "Generación detenida. Esta respuesta parcial no se guardó.",
+    retryHistory: "Reintentar carga",
+    contextCurrent: "Entrenamiento actual",
+    contextRecent: "Últimos 7 días",
+    contextWeeklySaved: "Resumen semanal guardado",
+    contextWeekly: "Entrenamiento de esta semana",
+    contextMonthlySaved: "Resumen mensual guardado",
+    contextMonthly: "Entrenamiento de este mes",
+    contextQuestion: "Tu pregunta",
+    contextExercise: "Últimas {count} sesiones por ejercicio",
+    contextConversation: "Conversación anterior ({count} intercambios)",
+    contextUnknown: "Contexto anterior",
     title: 'IA',
     offSubtitle: 'Opcional · desactivada',
     offTitle: 'La IA está desactivada',
@@ -434,6 +448,7 @@ export const es: Messages = {
   },
 
   data: {
+    restoreAiCredentials: "Si cambia el destino de IA, se borra la clave API anterior y se desactiva la IA. Configúrala en Ajustes antes de enviar otra solicitud.",
     title: 'Copia de seguridad',
     subtitle: 'Tus datos siguen siendo tuyos',
     onDevice: 'En este dispositivo',

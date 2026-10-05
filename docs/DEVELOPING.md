@@ -68,11 +68,11 @@ Gradle is provided by the wrapper; it downloads its distribution on first run.
 
 ```bash
 npm run verify         # lint + typecheck + test + production build
-npm run test           # 320 unit tests in 63 suites (node --test)
+npm run test           # 358 unit tests in 71 suites (node --test)
 npm run test:browser   # headless Chrome drives the real app at a phone and a desktop viewport
 ```
 
-The browser suite runs 165 checks at the phone viewport and 166 at the desktop one, and asserts at each
+The browser suite runs 181 checks at the phone viewport and 182 at the desktop one, and asserts at each
 width that exactly one navigation is shown and that nothing overflows.
 
 ## House rules
@@ -152,11 +152,11 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 ```bash
 npm run verify         # lint + typecheck + test + 生产构建
-npm run test           # 320 个单元测试，63 个测试套件（node --test）
+npm run test           # 358 个单元测试，71 个测试套件（node --test）
 npm run test:browser   # 无头 Chrome 在手机和桌面两种视口下驱动真实应用
 ```
 
-浏览器用例在手机视口下执行 165 项检查，在桌面视口下执行 166 项，并在每种宽度下断言只显示一个导航、没有任何横向溢出。
+浏览器用例在手机视口下执行 181 项检查，在桌面视口下执行 182 项，并在每种宽度下断言只显示一个导航、没有任何横向溢出。
 
 ### 项目规矩
 

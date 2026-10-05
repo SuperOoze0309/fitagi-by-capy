@@ -4,7 +4,7 @@
  * The app never talks to a database directly; it talks to a `StorageAdapter`.
  * Two implementations exist:
  *
- *  - `idb`    → IndexedDB. Used for browser development and as a universal fallback.
+ *  - `idb`    → IndexedDB. Used in the browser.
  *  - `sqlite` → Capacitor SQLite. Used on Android.
  *
  * Both use the same shape: named collections of JSON records plus a small
@@ -64,13 +64,24 @@ export interface StorageAdapter {
 /** In-memory cache in front of an adapter: avoids re-reading the whole store on every render. */
 export class CollectionCache<T extends { id: string }> implements Collection<T> {
   private cache: Map<string, T> | null = null;
+  private revision = 0;
+  private loading: { revision: number; promise: Promise<T[]> } | null = null;
 
   constructor(private readonly inner: Collection<T>) {}
 
   private async ensure(): Promise<Map<string, T>> {
-    if (!this.cache) {
-      const rows = await this.inner.all();
-      this.cache = new Map(rows.map((row) => [row.id, row]));
+    while (!this.cache) {
+      const revision = this.revision;
+      const loading = this.loading?.revision === revision
+        ? this.loading : { revision, promise: this.inner.all() };
+      this.loading = loading;
+      try {
+        const rows = await loading.promise;
+        // A write/invalidation happened while this read was pending. Read again.
+        if (revision === this.revision) this.cache = new Map(rows.map((row) => [row.id, row]));
+      } finally {
+        if (this.loading === loading) this.loading = null;
+      }
     }
     return this.cache;
   }
@@ -86,27 +97,24 @@ export class CollectionCache<T extends { id: string }> implements Collection<T> 
   }
 
   async put(record: T): Promise<void> {
-    await this.inner.put(record);
-    const cache = await this.ensure();
-    cache.set(record.id, record);
+    this.invalidate();
+    try { await this.inner.put(record); } finally { this.invalidate(); }
   }
 
   async putMany(records: T[]): Promise<void> {
     if (records.length === 0) return;
-    await this.inner.putMany(records);
-    const cache = await this.ensure();
-    for (const record of records) cache.set(record.id, record);
+    this.invalidate();
+    try { await this.inner.putMany(records); } finally { this.invalidate(); }
   }
 
   async remove(id: string): Promise<void> {
-    await this.inner.remove(id);
-    const cache = await this.ensure();
-    cache.delete(id);
+    this.invalidate();
+    try { await this.inner.remove(id); } finally { this.invalidate(); }
   }
 
   async clear(): Promise<void> {
-    await this.inner.clear();
-    this.cache = new Map();
+    this.invalidate();
+    try { await this.inner.clear(); } finally { this.invalidate(); }
   }
 
   async count(): Promise<number> {
@@ -116,6 +124,7 @@ export class CollectionCache<T extends { id: string }> implements Collection<T> 
 
   /** Drop the cache so the next read re-reads from the adapter (used after import). */
   invalidate(): void {
+    this.revision += 1;
     this.cache = null;
   }
 }

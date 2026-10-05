@@ -671,11 +671,13 @@ export async function applyBackup(
       if (!keepPhotoKeys.has(key)) await storage.images.remove(key);
     }
 
-    // Keep the key that is already on this device: it is never part of a backup.
+    // A key belongs to its endpoint. A backup must not redirect an existing key.
+    const sameEndpoint = sameAiEndpoint(current.aiBaseUrl, document.settings.aiBaseUrl);
     const restored: Settings = {
       ...document.settings,
       id: 'app',
-      aiApiKey: current.aiApiKey,
+      aiApiKey: sameEndpoint ? current.aiApiKey : '',
+      aiEnabled: sameEndpoint && document.settings.aiEnabled,
     };
     await repos.settings.save(restored);
 
@@ -689,6 +691,21 @@ export async function applyBackup(
       })`,
     );
   }
+}
+
+/** Compare URL trust scopes, retaining path and query differences. */
+export function sameAiEndpoint(first: string, second: string): boolean {
+  const canonical = (input: string): string | null => {
+    try {
+      const url = new URL(input.trim());
+      if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.hash) return null;
+      url.pathname = url.pathname.replace(/\/+$/, '');
+      return url.toString();
+    } catch { return null; }
+  };
+  if (first.trim() === '' && second.trim() === '') return true;
+  const a = canonical(first);
+  return a !== null && a === canonical(second);
 }
 
 /** Everything currently stored, used to undo a partially applied restore. */

@@ -85,6 +85,7 @@ export interface EditablePreviewSet {
   unit: WeightUnit;
   reps: number | null;
   rpe: number | null;
+  rir: number | null;
   isFailure: boolean;
   isWarmup: boolean;
   isDropSet: boolean;
@@ -130,6 +131,7 @@ export function draftToPreview(
         unit: set.unit,
         reps: set.reps,
         rpe: set.rpe,
+        rir: set.rir,
         isFailure: set.isFailure,
         isWarmup: set.isWarmup,
         isDropSet: set.isDropSet,
@@ -156,7 +158,7 @@ export function previewToDraft(
           unit: set.unit,
           reps: set.reps,
           rpe: set.rpe,
-          rir: null,
+          rir: set.rir,
           isFailure: set.isFailure,
           isWarmup: set.isWarmup,
           isDropSet: set.isDropSet,

@@ -339,9 +339,9 @@ object.
 
 `src/services/ai/userContext.ts` turns it into the short block that a model actually sees:
 
-- `resolveMetrics()` resolves height/weight/goal weight into metric values. `unitSystem` decides how
-  the stored numbers are *interpreted* (in imperial mode a stored `weightKg: 130` means 130 lb as
-  typed), and this is the only place that conversion happens.
+- `resolveMetrics()` uses the stored centimetres and kilograms directly. The profile form converts
+  imperial input before saving; `unitSystem` affects display only. Existing profile records are not
+  mass-converted. Weight captions convert kilograms to pounds only when displaying imperial units.
 - `resolveAge()` prefers a directly entered age and otherwise derives it from the birthday.
   `parsePlainDate()` builds a `YYYY-MM-DD` value from its parts instead of `new Date('2005-06-16')`,
   which JavaScript parses as UTC midnight and which therefore shifts the birthday — and the age — by
@@ -378,11 +378,15 @@ BackupDocument {
 - The API key is stripped by destructuring in `createBackup`, and `BackupDocument` does not declare
   the field at all. `src/test/helpers/assertBackupSource.ts` asserts both against the source, so
   re-adding the key fails a test rather than leaking quietly.
-- `parseBackup` validates strictly (format marker, version, workouts array) and rejects a backup from
-  a newer format instead of silently dropping fields. Individual malformed records are filtered out
-  so one bad row cannot fail an otherwise good restore.
+- `parseBackup` validates nested records and rejects a newer format or malformed file with field
+  paths. It does not silently filter out bad rows. `applyBackup` validates again before writing.
+- An endpoint change during restore clears the device API key and disables AI. Only the same
+  normalized URL (including its path and query) may retain the key.
 - `applyBackup` is replace-only: a restore is expected to reproduce the backup exactly, and silently
   merging two divergent histories is how people lose data. Storage caches are invalidated afterwards.
+- Restore currently uses an in-memory journal and compensating writes. It is **not** a database
+  transaction or crash-safe recovery; rollback can also fail, and removed photos cannot be restored
+  by that journal. DS-02 remains open until durable atomic restoration is implemented.
 - Meal photos are deliberately **not** in the document: they would dominate its size and they are not
   the record. A restored meal keeps every number and has no image.
 - `profile` is `null` when nothing was filled in (`hasProfileContent()`), and a profile-shaped object
@@ -823,7 +827,7 @@ for the case where a session was finished by mistake — "finished" is a state, 
 
 | Command | What it covers |
 | --- | --- |
-| `npm test` | 320 tests in 63 suites (`src/**/*.test.ts`): repositories, units and formatting, metrics, alias rules, exercise history and personal bests, anomaly detection and the correction path, summary builders / service / catch-up / polish, Markdown and CSV exports, backup/restore and v1 compatibility, migrations, settings-write serialisation, **reminder scheduling arithmetic and plan normalisation**, **AI proposal parsing**, **streamed-chunk reading**, **stored AI conversations and their follow-up memory caps**, the offline parser, the context builder, the OpenAI client against a mocked `fetch`, theme tokens, status-bar icon selection, the pixel sprites, **motif and scenery composition**, catalogue parity **and completeness** across the three locales, vision capability detection, meal analysis and the profile context, the **real** `IndexedDbAdapter` via `fake-indexeddb`, and the `SqliteAdapter`'s real SQL via a fake Capacitor plugin. |
+| `npm test` | 358 tests in 71 suites (`src/**/*.test.ts`): repositories, units and formatting, metrics, alias rules, exercise history and personal bests, anomaly detection and the correction path, summary builders / service / catch-up / polish, Markdown and CSV exports, backup/restore and v1 compatibility, migrations, settings-write serialisation, **reminder scheduling arithmetic and plan normalisation**, **AI proposal parsing**, **streamed-chunk reading**, **stored AI conversations and their follow-up memory caps**, the offline parser, the context builder, the OpenAI client against a mocked `fetch`, theme tokens, status-bar icon selection, the pixel sprites, **motif and scenery composition**, catalogue parity **and completeness** across the three locales, vision capability detection, meal analysis and the profile context, the **real** `IndexedDbAdapter` via `fake-indexeddb`, and the `SqliteAdapter`'s real SQL via a fake Capacitor plugin. |
 | `npm run test:browser` | `scripts/smoke.ps1` starts a throwaway Vite server and drives headless Chrome (or Edge) over CDP through the real app with `?smoke=1`, twice: at a phone viewport (390×844) and a desktop one (1280×900), each in its own browser profile so the two runs cannot influence each other. The in-page suite in `src/dev/browserSmoke.ts` records and finishes a workout across two page reloads, walks exercise history (chart metric toggle, PR badge), rules, backup round-trip, Markdown/CSV export, the browser download path, Quick Log preview+confirm, the AI page with AI off, summaries, the outlier review, manual meal entry/edit/delete, the vision-specific refusal, language switching in both directions, theme switching, and the responsive layout — then crashes a component through the real error boundary and asserts React logged no console errors. Every check must pass at both viewports. |
 | `npm run verify` | lint + typecheck + tests + production build. |
 

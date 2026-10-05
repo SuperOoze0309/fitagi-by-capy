@@ -29,6 +29,7 @@ let bundle: StorageBundle | null = null;
  * its splash screen. Caching the promise makes the second caller wait for the first.
  */
 let initialising: Promise<StorageBundle> | null = null;
+let destroying: Promise<void> | null = null;
 
 /**
  * Pick the storage backend for the current platform.
@@ -80,6 +81,7 @@ export function isNativePlatform(): boolean {
  * Tests pass their own adapter to run the same code path without a browser.
  */
 export async function initStorage(adapter?: StorageAdapter): Promise<StorageBundle> {
+  if (destroying) await destroying;
   if (bundle) return bundle;
   if (initialising) return initialising;
 
@@ -161,13 +163,20 @@ export function whenStorageReady(timeoutMs = 15000): Promise<StorageBundle> {
 
 /** Drop all locally stored records. */
 export async function destroyStorage(): Promise<void> {
-  if (!bundle) return;
-  await bundle.adapter.destroy();
-  bundle = null;
+  if (destroying) return destroying;
+  const run = (async () => {
+    const current = bundle ?? (initialising ? await initialising : null);
+    if (current) await current.adapter.destroy();
+    bundle = null;
+    initialising = null;
+  })();
+  destroying = run;
+  try { await run; } finally { if (destroying === run) destroying = null; }
 }
 
 /** Forget the singleton so a test can start from a clean slate. */
 export function resetStorageForTests(): void {
   bundle = null;
   initialising = null;
+  destroying = null;
 }

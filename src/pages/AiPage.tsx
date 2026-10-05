@@ -4,6 +4,8 @@ import { PageHeader, Segmented } from '../components/ui';
 import type { MessageKey } from '../i18n';
 import type { AiRole, ConversationTurn } from '../services/ai';
 import { aiService } from '../services/ai';
+import { RequestSession, shouldSendOnEnter } from '../services/ai/requestSession';
+import { contextSectionLabel } from '../services/ai/contextLabels';
 import { newId } from '../domain/ids';
 import type { AiConversationEntry } from '../repositories/aiConversationRepository';
 import { repositories } from '../repositories';
@@ -75,13 +77,31 @@ export function AiPage() {
   /** Whether the thread is scrolled to the bottom, so streaming can follow it. */
   const stickRef = useRef(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const session = useRef(new RequestSession());
+  const loadRevision = useRef(0);
+
+  useEffect(() => () => {
+    session.current.cancel();
+    loadRevision.current += 1;
+  }, []);
+
+  // A settings change must not let a request to the previous endpoint continue.
+  useEffect(() => {
+    session.current.cancel();
+    setBusy(false);
+    replaceExchanges(exchangesRef.current.filter((entry) => !entry.streaming));
+  }, [settings.aiBaseUrl, settings.aiModel, settings.aiApiKey, settings.aiEnabled, replaceExchanges]);
 
   const loadHistory = useCallback(async () => {
+    const revision = ++loadRevision.current;
+    setHistoryReady(false);
     setHistoryFailed(false);
     try {
       const saved = await repositories().aiConversation.recent();
+      if (revision !== loadRevision.current) return;
       replaceExchanges(saved);
     } catch {
+      if (revision !== loadRevision.current) return;
       /*
        * "The read failed" is not "there is nothing stored". Treating them the same let
        * a page with an unread history answer a question and then persist its own empty
@@ -91,7 +111,7 @@ export function AiPage() {
       setHistoryFailed(true);
       toast.show(t('ai.memoryLoadFailed'), 'error');
     } finally {
-      setHistoryReady(true);
+      if (revision === loadRevision.current) setHistoryReady(true);
     }
   }, [replaceExchanges, t, toast]);
 
@@ -135,6 +155,10 @@ export function AiPage() {
   const ask = useCallback(async () => {
     const trimmed = question.trim();
     if (trimmed === '' || busy || !historyReady || historyFailed) return;
+    const request = session.current.begin();
+    if (!request) return;
+    const conversation = repositories().aiConversation;
+    const revision = conversation.revision;
     setBusy(true);
     setQuestion('');
     stickRef.current = true;
@@ -156,11 +180,13 @@ export function AiPage() {
 
     try {
       const currentWorkout = await repositories().training.inProgress();
+      if (!session.current.isCurrent(request)) return;
       const history = toConversationHistory(exchangesRef.current);
       const { answer, context } = await ai.askStreaming(
         trimmed,
         role,
         (_delta, full) => {
+          if (!session.current.isCurrent(request)) return;
           replaceExchanges(
             exchangesRef.current.map((exchange) =>
               exchange.id === id ? { ...exchange, answer: full } : exchange,
@@ -170,8 +196,10 @@ export function AiPage() {
         {
           ...(currentWorkout ? { workoutId: currentWorkout.id } : {}),
           history,
+          signal: request.signal,
         },
       );
+      if (!session.current.isCurrent(request)) return;
       const next = exchangesRef.current.map((exchange) =>
         exchange.id === id
           ? {
@@ -184,8 +212,9 @@ export function AiPage() {
           : exchange,
       );
       replaceExchanges(next);
-      await saveConversation(next, toast, t);
+      await saveConversation(next.filter((entry) => entry.id === id), revision, toast, t);
     } catch (error) {
+      if (!session.current.isCurrent(request)) return;
       const message = error instanceof Error ? error.message : t('ai.requestFailed');
       replaceExchanges(
         exchangesRef.current.map((exchange) =>
@@ -196,8 +225,10 @@ export function AiPage() {
       );
       toast.show(message, 'error');
     } finally {
-      setBusy(false);
-      inputRef.current?.focus();
+      if (session.current.finish(request)) {
+        setBusy(false);
+        inputRef.current?.focus();
+      }
     }
   }, [ai, busy, historyFailed, historyReady, question, replaceExchanges, role, t, toast]);
 
@@ -210,6 +241,9 @@ export function AiPage() {
    */
   const summarize = useCallback(async () => {
     if (busy || !historyReady || historyFailed) return;
+    const request = session.current.begin();
+    if (!request) return;
+    const revision = repositories().aiConversation.revision;
     setBusy(true);
     stickRef.current = true;
 
@@ -230,16 +264,19 @@ export function AiPage() {
 
     try {
       const currentWorkout = await repositories().training.inProgress();
+      if (!session.current.isCurrent(request)) return;
       const context = await ai.buildContext({
         includeWeekly: true,
         ...(currentWorkout ? { workoutId: currentWorkout.id } : {}),
       });
+      if (!session.current.isCurrent(request)) return;
       if (context.text.trim() === '') {
         replaceExchanges(exchangesRef.current.filter((exchange) => exchange.id !== id));
         toast.show(t('ai.nothingToSummarise'));
         return;
       }
-      const answer = await ai.summarize(context);
+      const answer = await ai.summarize(context, { signal: request.signal });
+      if (!session.current.isCurrent(request)) return;
       const next = exchangesRef.current.map((exchange) =>
         exchange.id === id
           ? {
@@ -252,8 +289,9 @@ export function AiPage() {
           : exchange,
       );
       replaceExchanges(next);
-      await saveConversation(next, toast, t);
+      await saveConversation(next.filter((entry) => entry.id === id), revision, toast, t);
     } catch (error) {
+      if (!session.current.isCurrent(request)) return;
       const message = error instanceof Error ? error.message : t('ai.requestFailed');
       replaceExchanges(
         exchangesRef.current.map((exchange) =>
@@ -264,16 +302,28 @@ export function AiPage() {
       );
       toast.show(message, 'error');
     } finally {
-      setBusy(false);
+      if (session.current.finish(request)) setBusy(false);
     }
   }, [ai, busy, historyFailed, historyReady, replaceExchanges, t, toast]);
 
+  const stop = useCallback(() => {
+    session.current.cancel();
+    setBusy(false);
+    replaceExchanges(exchangesRef.current.map((entry) => entry.streaming
+      ? { ...entry, streaming: false, failed: true, answer: entry.answer || t('ai.stopped') } : entry));
+  }, [replaceExchanges, t]);
+
   const clearConversation = useCallback(async () => {
-    replaceExchanges([]);
+    session.current.cancel();
+    loadRevision.current += 1;
+    setBusy(true);
     try {
       await repositories().aiConversation.clear();
+      replaceExchanges([]);
     } catch {
       toast.show(t('ai.memoryClearFailed'), 'error');
+    } finally {
+      setBusy(false);
     }
   }, [replaceExchanges, t, toast]);
 
@@ -384,6 +434,15 @@ export function AiPage() {
 
           <div className="banner small">{t('ai.privacy', { target: ai.describeTarget() })}</div>
 
+          {historyFailed ? (
+            <div className="banner warn row-between" role="alert">
+              <span>{t('ai.memoryLoadFailed')}</span>
+              <button type="button" className="btn btn-sm" onClick={() => void loadHistory()}>
+                {t('ai.retryHistory')}
+              </button>
+            </div>
+          ) : null}
+
           <div className="chat-thread chat-scroll" ref={threadRef} onScroll={onThreadScroll}>
             {exchanges.length === 0 ? (
               <div className="chat-empty">
@@ -413,7 +472,7 @@ export function AiPage() {
                         </summary>
                         <p className="small faint" style={{ margin: 'var(--space-1) 0 0' }}>
                           {exchange.contextSections.length > 0
-                            ? exchange.contextSections.join(', ')
+                            ? exchange.contextSections.map((section) => contextSectionLabel(section, t)).join(', ')
                             : t('ai.noContext')}
                         </p>
                       </details>
@@ -465,7 +524,7 @@ export function AiPage() {
                 rows={1}
                 onChange={(event) => setQuestion(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
+                  if (shouldSendOnEnter(event.nativeEvent)) {
                     event.preventDefault();
                     void ask();
                   }
@@ -474,11 +533,11 @@ export function AiPage() {
               <button
                 type="button"
                 className="btn btn-primary chat-send"
-                disabled={busy || !historyReady || historyFailed || question.trim() === ''}
-                aria-label={t('ai.ask', { role: t(ROLE_KEYS[role]) })}
-                onClick={() => void ask()}
+                disabled={busy ? !session.current.isActive : (!historyReady || historyFailed || question.trim() === '')}
+                aria-label={busy && session.current.isActive ? t('ai.stop') : t('ai.ask', { role: t(ROLE_KEYS[role]) })}
+                onClick={() => busy ? stop() : void ask()}
               >
-                {busy ? '…' : '↑'}
+                {busy ? (session.current.isActive ? '■' : '…') : '↑'}
               </button>
             </div>
           </div>
@@ -498,6 +557,7 @@ function toConversationHistory(exchanges: Exchange[]): ConversationTurn[] {
 
 async function saveConversation(
   exchanges: Exchange[],
+  revision: number,
   toast: ReturnType<typeof useToast>,
   t: ReturnType<typeof useI18n>['t'],
 ): Promise<void> {
@@ -518,7 +578,7 @@ async function saveConversation(
      * holding over the stored transcript, so a second page, a failed read, or a clear
      * during a slow answer could erase exchanges this page had never seen.
      */
-    await repositories().aiConversation.append(entries);
+    await repositories().aiConversation.append(entries, revision);
   } catch {
     toast.show(t('ai.memorySaveFailed'), 'error');
   }

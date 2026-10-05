@@ -332,6 +332,7 @@ function describePending(
       meals: summary.meals,
     }),
     t('data.restoreReplaces', { count: currentWorkouts }),
+    t('data.restoreAiCredentials'),
   ].join('\n\n');
 }
 

@@ -99,7 +99,7 @@ describe('context builder', () => {
     assert.match(sessionLines[0]!, /61kg/);
     assert.match(sessionLines[2]!, /63kg/);
     assert.ok(!context.text.includes('66kg'), 'a session older than the window is excluded');
-    assert.ok(context.sections.includes('last 3 sessions per exercise'));
+    assert.ok(context.sections.includes('exerciseSessions:3'));
   });
 
   it('attaches the in-progress workout when asked', async () => {
@@ -113,7 +113,7 @@ describe('context builder', () => {
     const context = await builder.build({ workoutId: workout.id });
     assert.match(context.text, /## Current workout/);
     assert.match(context.text, /Squat: 120kgx5/);
-    assert.ok(context.sections.includes('current workout'));
+    assert.ok(context.sections.includes('currentWorkout'));
   });
 
   it('summarises the last 7 days without sending every workout', async () => {
@@ -129,7 +129,7 @@ describe('context builder', () => {
     // Without a stored weekly summary the builder computes the rollup on the fly,
     // and says so. With one stored it is labelled as the saved summary instead.
     assert.ok(
-      context.sections.some((section) => section.startsWith('weekly rollup')),
+      context.sections.some((section) => section === 'weeklyComputed'),
       `sections: ${context.sections.join(', ')}`,
     );
     // 50 kg x 10 reps for the one session inside the window.
@@ -149,7 +149,7 @@ describe('context builder', () => {
 
     const context = await builder.build({ includeWeekly: true });
     assert.ok(
-      context.sections.includes('saved weekly summary'),
+      context.sections.includes('weeklySaved'),
       `sections: ${context.sections.join(', ')}`,
     );
     assert.match(context.text, /saved summary/);

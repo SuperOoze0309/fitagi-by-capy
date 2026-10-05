@@ -1,5 +1,5 @@
 import type { UserProfile } from '../../domain/types';
-import { fromKg, formatNumber, lbToKg } from '../../domain/units';
+import { fromKg, formatNumber } from '../../domain/units';
 
 /**
  * User context.
@@ -24,16 +24,12 @@ export interface ProfileMetrics {
 /**
  * Resolve the profile into metric values.
  *
- * `unitSystem` decides how the stored numbers are *interpreted*: a user who chose
- * imperial typed feet/inches and pounds, so a stored `weightKg: 130` means 130 lb
- * for them. This is the one place that conversion happens.
+ * The profile form stores centimetres and kilograms in both display systems.
+ * `unitSystem` changes presentation only; existing records must not be converted.
  */
 export function resolveMetrics(profile: UserProfile): ProfileMetrics {
-  const imperial = profile.unitSystem === 'imperial';
-  // In imperial mode the stored weight is pounds; in metric mode it is kilograms.
-  const weightKg = profile.weightKg === null ? 0 : imperial ? lbToKg(profile.weightKg) : profile.weightKg;
-  const goalWeightKg =
-    profile.goalWeightKg === null ? null : imperial ? lbToKg(profile.goalWeightKg) : profile.goalWeightKg;
+  const weightKg = profile.weightKg ?? 0;
+  const goalWeightKg = profile.goalWeightKg;
 
   return {
     // Height is always stored in centimetres; the form converts for display.
@@ -122,7 +118,7 @@ export function buildProfileBlock(profile: UserProfile): string {
   if (metrics.weightKg > 0) {
     lines.push(
       `Weight: ${formatNumber(metrics.weightKg, 1)} kg${
-        imperial ? ` (${formatNumber(profile.weightKg ?? 0, 1)} lb as entered)` : ''
+        imperial ? ` (${formatNumber(fromKg(metrics.weightKg, 'lb'), 1)} lb)` : ''
       }`,
     );
   }
@@ -161,6 +157,6 @@ export function describeWeightForDisplay(profile: UserProfile): string {
   if (profile.weightKg === null) return '';
   const imperial = profile.unitSystem === 'imperial';
   return imperial
-    ? `${formatNumber(profile.weightKg, 1)} lb`
+    ? `${formatNumber(fromKg(profile.weightKg, 'lb'), 1)} lb`
     : `${formatNumber(fromKg(profile.weightKg, 'kg'), 1)} kg`;
 }

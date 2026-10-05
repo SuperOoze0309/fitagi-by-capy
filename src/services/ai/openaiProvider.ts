@@ -46,26 +46,16 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     return `${this.config.model} @ ${hostOf(this.config.baseUrl)}`;
   }
 
-  async chat(messages: ChatMessage[], options: { temperature?: number } = {}): Promise<string> {
+  async chat(messages: ChatMessage[], options: { temperature?: number; signal?: AbortSignal } = {}): Promise<string> {
     if (!this.isConfigured()) throw new LlmNotConfiguredError();
-    const response = await this.send(messages, options, false);
-    const bodyText = await response.text();
-    if (!response.ok) {
-      throw new LlmRequestError(describeHttpError(response.status, bodyText), response.status);
-    }
-
-    let payload: unknown;
-    try {
-      payload = JSON.parse(bodyText);
-    } catch {
-      throw new LlmRequestError('The model service returned a response that is not JSON.');
-    }
-
-    const content = extractContent(payload);
-    if (content === null) {
-      throw new LlmRequestError('The model service returned no message content.');
-    }
-    return content;
+    return this.withRequest(options.signal, async (signal) => {
+      const response = await this.send(messages, options, false, signal);
+      const bodyText = await abortable(response.text(), signal);
+      if (!response.ok) {
+        throw new LlmRequestError(describeHttpError(response.status, bodyText), response.status);
+      }
+      return contentFromBody(bodyText);
+    });
   }
 
   /**
@@ -90,71 +80,93 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     options: { temperature?: number; signal?: AbortSignal } = {},
   ): Promise<string> {
     if (!this.isConfigured()) throw new LlmNotConfiguredError();
-    const response = await this.send(messages, options, true, options.signal);
+    return this.withRequest(options.signal, async (signal) => {
+      const response = await this.send(messages, options, true, signal);
 
-    if (!response.ok) {
-      const bodyText = await response.text().catch(() => '');
-      throw new LlmRequestError(describeHttpError(response.status, bodyText), response.status);
-    }
-
-    const contentType = response.headers?.get?.('content-type') ?? '';
-    const body = response.body;
-    if (!body || typeof body.getReader !== 'function' || contentType.includes('application/json')) {
-      // Not a stream: read it whole and emit once.
-      const text = await response.text();
-      const content = contentFromBody(text);
-      onDelta(content);
-      return content;
-    }
-
-    const reader = body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let full = '';
-
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      // Server-sent events are separated by a blank line; a chunk can split one in
-      // half, so only complete events are consumed and the rest stays buffered.
-      let boundary = buffer.indexOf('\n\n');
-      while (boundary !== -1) {
-        const event = buffer.slice(0, boundary);
-        buffer = buffer.slice(boundary + 2);
-        boundary = buffer.indexOf('\n\n');
-
-        for (const line of event.split('\n')) {
-          if (!line.startsWith('data:')) continue;
-          const data = line.slice(5).trim();
-          if (data === '' || data === '[DONE]') continue;
-          const delta = deltaFromChunk(data);
-          if (delta !== null && delta !== '') {
-            full += delta;
-            onDelta(delta);
-          }
-        }
+      if (!response.ok) {
+        const bodyText = await abortable(response.text(), signal);
+        throw new LlmRequestError(describeHttpError(response.status, bodyText), response.status);
       }
-    }
 
-    // Some gateways end the stream without a trailing blank line.
-    const tail = buffer.trim();
-    if (tail.startsWith('data:')) {
-      const data = tail.slice(5).trim();
-      if (data !== '' && data !== '[DONE]') {
+      const contentType = response.headers?.get?.('content-type') ?? '';
+      const body = response.body;
+      if (!body || typeof body.getReader !== 'function' || contentType.includes('application/json')) {
+        // Not a stream: read it whole and emit once.
+        const text = await abortable(response.text(), signal);
+        const content = contentFromBody(text);
+        onDelta(content);
+        return content;
+      }
+
+      const reader = body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let full = '';
+      let dataLines: string[] = [];
+      let finished = false;
+      const dispatch = () => {
+        const data = dataLines.join('\n').trim();
+        dataLines = [];
+        if (data === '[DONE]') { finished = true; return; }
         const delta = deltaFromChunk(data);
-        if (delta) {
-          full += delta;
-          onDelta(delta);
+        if (delta) { full += delta; onDelta(delta); }
+      };
+      const consumeLine = (line: string) => {
+        if (line === '') dispatch();
+        else if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
+      };
+      const consume = (eof: boolean) => {
+        while (!finished) {
+          const end = buffer.search(/[\r\n]/);
+          if (end < 0) break;
+          // A CR at a chunk boundary might be the first half of CRLF.
+          if (!eof && buffer[end] === '\r' && end === buffer.length - 1) break;
+          const length = buffer[end] === '\r' && buffer[end + 1] === '\n' ? 2 : 1;
+          const line = buffer.slice(0, end);
+          buffer = buffer.slice(end + length);
+          consumeLine(line);
         }
+        if (eof && !finished) { consumeLine(buffer); buffer = ''; dispatch(); }
+      };
+      let eof = false;
+      try {
+        while (!finished) {
+          const chunk = await abortable(reader.read(), signal);
+          if (chunk.done) {
+            eof = true;
+            buffer += decoder.decode();
+            consume(true);
+            break;
+          }
+          buffer += decoder.decode(chunk.value, { stream: true });
+          consume(false);
+        }
+      } finally {
+        // DONE is a terminal event even if a gateway keeps its socket open.
+        if (!eof) void reader.cancel().catch(() => undefined);
+        reader.releaseLock();
       }
-    }
+      if (full === '') {
+        throw new LlmRequestError('The model service returned no message content.');
+      }
+      return full;
+    });
+  }
 
-    if (full === '') {
-      throw new LlmRequestError('The model service returned no message content.');
+  private async withRequest<T>(external: AbortSignal | undefined, work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController();
+    const cancel = () => controller.abort(external?.reason);
+    if (external?.aborted) cancel();
+    else external?.addEventListener('abort', cancel, { once: true });
+    const timer = setTimeout(() => controller.abort(new LlmRequestError('The model service timed out. Please try again.')),
+      this.config.requestTimeoutMs ?? 120_000);
+    try {
+      controller.signal.throwIfAborted();
+      return await work(controller.signal);
+    } finally {
+      clearTimeout(timer);
+      external?.removeEventListener('abort', cancel);
     }
-    return full;
   }
 
   /** One place that builds the request, so streaming cannot drift from not. */
@@ -172,7 +184,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     }
 
     try {
-      return await this.fetchImpl(url, {
+      return await abortable(this.fetchImpl(url, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -182,8 +194,9 @@ export class OpenAiCompatibleProvider implements LlmProvider {
           stream,
         }),
         ...(signal ? { signal } : {}),
-      });
+      }), signal);
     } catch (error) {
+      if (signal?.aborted) throw signal.reason;
       throw new LlmRequestError(
         `Could not reach ${hostOf(this.config.baseUrl)}. Check the base URL and your connection. (${
           error instanceof Error ? error.message : String(error)
@@ -264,17 +277,28 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     return suggestions;
   }
 
-  async summarizeTraining(context: TrainingContext): Promise<string> {
+  async summarizeTraining(context: TrainingContext, options: { signal?: AbortSignal } = {}): Promise<string> {
     if (!this.isConfigured()) throw new LlmNotConfiguredError();
     return this.chat([
       { role: 'system', content: SUMMARIZE_SYSTEM },
       { role: 'user', content: context.text },
-    ]);
+    ], options);
   }
 
   async generateTrainingContext(request: ContextRequest = {}): Promise<TrainingContext> {
     return this.contextBuilder.build(request);
   }
+}
+
+/** Also bounds mocks/gateways that do not implement fetch cancellation correctly. */
+function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  return new Promise<T>((resolve, reject) => {
+    const cancel = () => reject(signal.reason);
+    signal.addEventListener('abort', cancel, { once: true });
+    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', cancel));
+    if (signal.aborted) cancel();
+  });
 }
 
 /** Strip a markdown fence if the model added one despite being told not to. */

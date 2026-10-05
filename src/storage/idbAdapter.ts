@@ -28,8 +28,8 @@ const COLLECTIONS: CollectionName[] = [
 const KEY_VALUE_STORES: KeyValueName[] = ['settings', 'presets', 'images', 'profile', 'aiChat'];
 
 /**
- * IndexedDB adapter — used when running in a browser (`npm run dev`) and as the
- * fallback if the native SQLite plugin is unavailable.
+ * IndexedDB adapter — the browser's own storage. Native SQLite failures do not
+ * silently switch to this independent database.
  */
 export class IndexedDbAdapter implements StorageAdapter {
   readonly kind = 'indexeddb' as const;
@@ -62,9 +62,11 @@ export class IndexedDbAdapter implements StorageAdapter {
     await this.close();
     await new Promise<void>((resolve, reject) => {
       const request = indexedDB.deleteDatabase(DB_NAME);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error ?? new Error('Failed to delete database'));
-      request.onblocked = () => resolve();
+      const timer = setTimeout(() => reject(new Error('IndexedDB deletion timed out; close other tabs.')), OPERATION_TIMEOUT_MS);
+      request.onsuccess = () => { clearTimeout(timer); resolve(); };
+      request.onerror = () => { clearTimeout(timer); reject(request.error ?? new Error('Failed to delete database')); };
+      // A blocked delete is still pending. Never announce success before onsuccess.
+      request.onblocked = () => { /* Wait for other connections to close, bounded above. */ };
     });
   }
 
@@ -86,24 +88,6 @@ export class IndexedDbAdapter implements StorageAdapter {
  */
 const OPERATION_TIMEOUT_MS = 8000;
 
-function withTimeout<T>(promise: Promise<T>, what: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`IndexedDB ${what} did not complete within ${OPERATION_TIMEOUT_MS}ms`));
-    }, OPERATION_TIMEOUT_MS);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error: unknown) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
-
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
@@ -111,14 +95,25 @@ function openDatabase(): Promise<IDBDatabase> {
       return;
     }
     const request = indexedDB.open(DB_NAME, DB_VERSION);
+    let failed = false;
+    const timer = setTimeout(() => {
+      failed = true;
+      reject(new Error('IndexedDB open timed out'));
+    }, OPERATION_TIMEOUT_MS);
     request.onupgradeneeded = () => {
+      if (failed) { request.transaction?.abort(); return; }
       const db = request.result;
       for (const name of [...COLLECTIONS, ...KEY_VALUE_STORES]) {
         if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: 'id' });
       }
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error('Failed to open IndexedDB'));
+    request.onsuccess = () => {
+      clearTimeout(timer);
+      if (failed) { request.result.close(); return; }
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
+    request.onerror = () => { clearTimeout(timer); failed = true; reject(request.error ?? new Error('Failed to open IndexedDB')); };
     /*
      * A schema upgrade blocks while another connection to the same database is open,
      * and an unhandled `blocked` event leaves this promise pending forever — which
@@ -126,126 +121,75 @@ function openDatabase(): Promise<IDBDatabase> {
      * loudly is the only useful behaviour here: the caller has a fallback path, and a
      * silent hang has none.
      */
-    request.onblocked = () =>
+    request.onblocked = () => {
+      failed = true;
+      clearTimeout(timer);
       reject(
         new Error(
           'IndexedDB upgrade is blocked by another open connection to this app. Close other tabs and reload.',
         ),
       );
+    };
   });
 }
 
-/** Wrap one request in a promise. */
-function promisify<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'));
-  });
-}
-
-function runTransaction(
-  db: IDBDatabase,
-  store: string,
-  mode: IDBTransactionMode,
-  run: (objectStore: IDBObjectStore) => void,
-): Promise<void> {
+/** Resolve only on commit; a deadline aborts the transaction so a late write cannot land. */
+function transaction<T = void>(
+  db: IDBDatabase, store: string, mode: IDBTransactionMode,
+  run: (store: IDBObjectStore) => IDBRequest<T> | void,
+): Promise<T> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(store, mode);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error('IndexedDB transaction failed'));
-    tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted'));
-    run(tx.objectStore(store));
+    let request: IDBRequest<T> | void;
+    const fail = (error: unknown) => { clearTimeout(timer); reject(error); };
+    const timer = setTimeout(() => {
+      fail(new Error(`IndexedDB operation on ${store} timed out`));
+      try { tx.abort(); } catch { /* Already completed. */ }
+    }, OPERATION_TIMEOUT_MS);
+    tx.oncomplete = () => { clearTimeout(timer); resolve(request ? request.result : undefined as T); };
+    tx.onerror = () => fail(tx.error ?? new Error('IndexedDB transaction failed'));
+    tx.onabort = () => fail(tx.error ?? new Error('IndexedDB transaction aborted'));
+    try { request = run(tx.objectStore(store)); }
+    catch (error) { try { tx.abort(); } catch { /* Already aborted. */ } fail(error); }
   });
 }
 
 class IndexedDbCollection<T extends { id: string }> implements Collection<T> {
-  constructor(
-    private readonly getDb: () => IDBDatabase,
-    private readonly store: string,
-  ) {}
-
-  async all(): Promise<T[]> {
-    const db = this.getDb();
-    const tx = db.transaction(this.store, 'readonly');
-    const rows = await withTimeout(
-      promisify(tx.objectStore(this.store).getAll() as IDBRequest<T[]>),
-      `read of ${this.store}`,
-    );
-    return rows;
+  constructor(private readonly getDb: () => IDBDatabase, private readonly store: string) {}
+  all(): Promise<T[]> {
+    return transaction<T[]>(this.getDb(), this.store, 'readonly', (store) => store.getAll());
   }
-
   async get(id: string): Promise<T | null> {
-    const db = this.getDb();
-    const tx = db.transaction(this.store, 'readonly');
-    const row = await withTimeout(
-      promisify(tx.objectStore(this.store).get(id) as IDBRequest<T | undefined>),
-      `read of ${this.store}`,
-    );
-    return row ?? null;
+    return (await transaction<T | undefined>(this.getDb(), this.store, 'readonly', (store) => store.get(id))) ?? null;
   }
-
-  async put(record: T): Promise<void> {
-    await withTimeout(
-      runTransaction(this.getDb(), this.store, 'readwrite', (store) => {
-        store.put(record as unknown as Record<string, unknown>);
-      }),
-      `write to ${this.store}`,
-    );
-  }
-
+  async put(record: T): Promise<void> { await this.putMany([record]); }
   async putMany(records: T[]): Promise<void> {
     if (records.length === 0) return;
-    await withTimeout(
-      runTransaction(this.getDb(), this.store, 'readwrite', (store) => {
-        for (const record of records) store.put(record as unknown as Record<string, unknown>);
-      }),
-      `bulk write to ${this.store}`,
-    );
+    await transaction(this.getDb(), this.store, 'readwrite', (store) => {
+      for (const record of records) store.put(record);
+    });
   }
-
   async remove(id: string): Promise<void> {
-    await runTransaction(this.getDb(), this.store, 'readwrite', (store) => {
-      store.delete(id);
-    });
+    await transaction(this.getDb(), this.store, 'readwrite', (store) => { store.delete(id); });
   }
-
   async clear(): Promise<void> {
-    await runTransaction(this.getDb(), this.store, 'readwrite', (store) => {
-      store.clear();
-    });
+    await transaction(this.getDb(), this.store, 'readwrite', (store) => { store.clear(); });
   }
-
-  async count(): Promise<number> {
-    const db = this.getDb();
-    const tx = db.transaction(this.store, 'readonly');
-    return promisify(tx.objectStore(this.store).count());
+  count(): Promise<number> {
+    return transaction<number>(this.getDb(), this.store, 'readonly', (store) => store.count());
   }
 }
 
 class IndexedDbKeyValue implements KeyValueStore {
-  constructor(
-    private readonly getDb: () => IDBDatabase,
-    private readonly store: string,
-  ) {}
-
+  constructor(private readonly getDb: () => IDBDatabase, private readonly store: string) {}
   async get<V>(key: string): Promise<V | null> {
-    const db = this.getDb();
-    const tx = db.transaction(this.store, 'readonly');
-    const row = await promisify(
-      tx.objectStore(this.store).get(key) as IDBRequest<{ id: string; value: V } | undefined>,
-    );
+    const row = await transaction<{ id: string; value: V } | undefined>(this.getDb(), this.store, 'readonly', (store) => store.get(key));
     return row ? row.value : null;
   }
-
   async set<V>(key: string, value: V): Promise<void> {
-    await runTransaction(this.getDb(), this.store, 'readwrite', (store) => {
-      store.put({ id: key, value });
-    });
+    await transaction(this.getDb(), this.store, 'readwrite', (store) => { store.put({ id: key, value }); });
   }
-
   async remove(key: string): Promise<void> {
-    await runTransaction(this.getDb(), this.store, 'readwrite', (store) => {
-      store.delete(key);
-    });
+    await transaction(this.getDb(), this.store, 'readwrite', (store) => { store.delete(key); });
   }
 }

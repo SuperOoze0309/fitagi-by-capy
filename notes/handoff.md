@@ -173,3 +173,32 @@
 - 没验证：真实端点的流式行为（仓库从未连过真实模型）；真机上的并发节奏
 - 已知风险：DS-08 的串行只在**同一仓储实例**内生效（应用只有一个实例，符合预期）；
   DS-22 的 append 不去重历史中的旧重复行，只保证新写入不重复
+
+## 2026-10-04 · Codex 接手调试与功能改进
+
+- 状态：正在写
+- 写者：Codex；用户本轮已授权直接实现、验收并 push。
+- 范围：AI provider/facade/context、AiPage、聊天仓储、资料单位、Quick Log 预览、备份端点凭据、缓存和存储生命周期；对应回归测试、三语文案、浏览器冒烟与文档。
+- 协调：此前 A 批“正在写”已由后续交付记录覆盖；当前工作区干净，以 `197c61e` 为基线。此轮上述文件由 Codex 写入。
+- 已自测：尚未运行。
+- 没验证：本轮完整验证、真机与真实模型。
+- 需要对方：此轮不要同时编辑上述文件或运行重活。
+- 已知风险：DS-02 当前只有内存补偿回滚，尚不满足持久化原子恢复的验收要求；不把这项标为已修。
+
+## 2026-10-04 · Codex 调试与功能改进交付
+
+- 状态：已验收（本轮改动；原 22 项清单尚未全部关闭）。解除本轮写锁。
+- 改动：
+  - `src/services/ai/{provider,openaiProvider,index,requestSession}.ts`、`src/pages/AiPage.tsx`：停止生成、退出取消、完整请求时限、稳健 SSE、历史重试、IME 判断。
+  - `src/repositories/aiConversationRepository.ts`：清空版本使旧请求无法重新追加历史；页面仅存本次新回答。
+  - `src/services/ai/{contextBuilder,contextLabels,userContext,materialize}.ts`、`src/pages/QuickLogPage.tsx`：日期范围、稳定上下文 ID 与旧标签兼容、正确公斤语义、RIR 保留/编辑、避免延迟保存强制跳回旧页。
+  - `src/services/backup.ts`、`src/pages/DataPage.tsx`：恢复端点变化时清 Key 并关闭 AI，预览说明行为。
+  - `src/storage/{adapter,idbAdapter,index}.ts`：缓存读取版本、操作时限与事务 abort、销毁/启动协调、删除受阻不虚报成功；没有改记录格式或存储区。
+  - `src/i18n/{en,zh-CN,es}.ts`：全部新增界面文案。
+  - `src/test/debugImprovements.test.ts`（新增 38 项 / 8 套件）；`aiServices.test.ts`、`mealAi.test.ts` 更新正确语义；`src/dev/browserSmoke.ts` 补真实页面回归。
+  - README 中英、DEVELOPING 中英段落、ARCHITECTURE 中英、CHANGELOG、`notes/README.md`、`notes/debug-2026-10-04.md`：功能、当前测试计数和真实限制。
+- 已自测：最终 `npm run verify` exit 0，**358 通过 / 71 套件 / 0 失败**；lint 0 error、2 条既有 warning，typecheck/build 通过；最终 `npm run test:browser` 手机 **181**、桌面 **182** 全通过、控制台零错误、exit 0；提交前 `git diff --check` 通过。
+- 验证中的失败：首轮浏览器各 16 条失败，修复了 Quick Log 的延迟跳转，并纠正两个新断言的 StrictMode/details 处理；RIR 新断言首轮误检查“last set”的第 1 组，改为检查第 4 组后复跑通过。具体过程见本轮调试记录。
+- 没验证：真机/模拟器、原生通知和对话框、真实模型、断电/进程中断恢复、删除超时后的完整 UI 恢复流程；测试使用隔离数据和假凭据。
+- 需要对方：后续从 `notes/debug-2026-10-04.md` 的剩余项接手；不要把本轮绿色验收扩大为全部缺陷修复。
+- 已知风险：DS-02 仍不具备持久化原子恢复；DS-05/06/09 与训练全快照写入协调仍待处理。模型两分钟总时限可能中断较慢端点，可再次发问；缓存写入后重新加载以保证一致性。

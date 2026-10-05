@@ -258,6 +258,7 @@ export const zhCN: Messages = {
   },
 
   quickLog: {
+    setRirLabel: "第 {index} 组剩余次数",
     title: '快速记录',
     aiOn: 'AI 已开启 · {target}',
     offlineParser: '本地解析 · AI 已关闭',
@@ -309,6 +310,19 @@ export const zhCN: Messages = {
   },
 
   ai: {
+    stop: "停止生成",
+    stopped: "已停止生成。这段未完成的回答不会保存。",
+    retryHistory: "重新加载",
+    contextCurrent: "当前训练",
+    contextRecent: "最近 7 天",
+    contextWeeklySaved: "已保存的周总结",
+    contextWeekly: "本周训练概况",
+    contextMonthlySaved: "已保存的月总结",
+    contextMonthly: "本月训练概况",
+    contextQuestion: "你的问题",
+    contextExercise: "每个动作最近 {count} 次训练",
+    contextConversation: "之前的对话（{count} 轮）",
+    contextUnknown: "此前的上下文",
     title: 'AI',
     offSubtitle: '可选 · 当前已关闭',
     offTitle: 'AI 已关闭',
@@ -412,6 +426,7 @@ export const zhCN: Messages = {
   },
 
   data: {
+    restoreAiCredentials: "如果 AI 端点发生变化，会清除原 API Key 并关闭 AI。再次发送请求前，请在设置中重新配置。",
     title: '备份与恢复',
     subtitle: '数据始终属于你',
     onDevice: '本机数据',

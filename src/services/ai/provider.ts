@@ -14,6 +14,8 @@ export interface LlmConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
+  /** Total request deadline, including the response body. Defaults to two minutes. */
+  requestTimeoutMs?: number;
 }
 
 /**
@@ -101,7 +103,7 @@ export interface LlmProvider {
   describeTarget(): string;
 
   /** Raw completion, used by the AI page and by the role prompts. */
-  chat(messages: ChatMessage[], options?: { temperature?: number }): Promise<string>;
+  chat(messages: ChatMessage[], options?: { temperature?: number; signal?: AbortSignal }): Promise<string>;
 
   /**
    * Optional: the same request, delivered as it arrives.
@@ -123,7 +125,7 @@ export interface LlmProvider {
   normalizeExercise(names: string[], knownNames: string[]): Promise<NormalizationSuggestion[]>;
 
   /** Prose summary of the supplied context. */
-  summarizeTraining(context: TrainingContext): Promise<string>;
+  summarizeTraining(context: TrainingContext, options?: { signal?: AbortSignal }): Promise<string>;
 
   /** Assemble the context for a task. Delegates to the Context Builder. */
   generateTrainingContext(request?: {

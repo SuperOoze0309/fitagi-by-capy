@@ -4,7 +4,7 @@
 > 双方直接在 `D:\DSHWorkspace\FitnessAgent` 这个工作区里交接：改动落在文件上，结论落在
 > `notes/handoff.md` 里。任何人（包括后来的贡献者）都可以读它。
 >
-> 最后更新：2026-09-29
+> 最后更新：2026-10-04
 
 **English** | [简体中文](#协作约定--fitagi-by-capy)
 
@@ -88,11 +88,11 @@
 
 - 包管理：`npm`。常用命令：`npm run dev` / `build` / `test` / `test:browser` / `typecheck` /
   `lint` / `verify` / `cap:sync` / `android:apk`。
-- 单元测试：`node --test --experimental-transform-types`，目前 **283 个测试、55 个套件**。
+- 单元测试：`node --test --experimental-transform-types`，目前 **358 个测试、71 个套件**。
   这个数字写在 README（中英）、`docs/DEVELOPING.md`（中英）和 `docs/ARCHITECTURE.md`（中英）
   六处，**改动测试数量后要一起更新**，否则文档立刻过期（已经发生过一次）。
 - 浏览器冒烟：`scripts/smoke.ps1` 拉起 Vite（端口 **5199**，`--strictPort`）后跑两遍
-  （手机 390×844、桌面 1280×900），每遍独立浏览器配置目录。当前 165 / 166 项。
+  （手机 390×844、桌面 1280×900），每遍独立浏览器配置目录。当前 181 / 182 项。
   报告落在 `%TEMP%\fa-smoke-report-{phone,desktop}.json`。
 - 平台：Windows + PowerShell。`pwsh` 里**没有 heredoc**，多行提交信息写进临时文件再 `git commit -F`。
   控制台打印中文/破折号会出现乱码，那是显示问题，文件本身是 UTF-8。

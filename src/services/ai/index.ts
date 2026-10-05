@@ -213,6 +213,7 @@ export class AiService {
     } = {},
   ): Promise<{ answer: string; context: TrainingContext }> {
     if (!this.provider.isConfigured()) throw new LlmNotConfiguredError();
+    options.signal?.throwIfAborted();
 
     const detected =
       options.exerciseNames && options.exerciseNames.length > 0
@@ -228,6 +229,7 @@ export class AiService {
     };
 
     const context = await this.contextBuilder.build(request);
+    options.signal?.throwIfAborted();
     const memory = conversationMessages(options.history ?? []);
     addConversationDisclosure(context, memory);
     const messages: ChatMessage[] = [
@@ -238,7 +240,8 @@ export class AiService {
 
     const stream = this.provider.streamChat?.bind(this.provider);
     if (!stream) {
-      const answer = await this.provider.chat(messages);
+      const answer = await this.provider.chat(messages, { signal: options.signal });
+      options.signal?.throwIfAborted();
       onDelta(answer, answer);
       return { answer, context };
     }
@@ -256,8 +259,9 @@ export class AiService {
   }
 
   /** Summarize the supplied context without giving advice. */
-  async summarize(context: TrainingContext): Promise<string> {
-    return this.provider.summarizeTraining(context);
+  async summarize(context: TrainingContext, options: { signal?: AbortSignal } = {}): Promise<string> {
+    options.signal?.throwIfAborted();
+    return this.provider.summarizeTraining(context, options);
   }
 
   buildContext(request: ContextRequest = {}): Promise<TrainingContext> {
@@ -428,6 +432,6 @@ function trimMemoryText(value: string, limit: number): string {
 
 function addConversationDisclosure(context: TrainingContext, memory: ConversationMemory): void {
   if (memory.exchanges === 0) return;
-  context.sections.push('previous conversation (' + memory.exchanges + ' exchanges)');
+  context.sections.push(`conversation:${memory.exchanges}`);
   context.characters += memory.characters;
 }

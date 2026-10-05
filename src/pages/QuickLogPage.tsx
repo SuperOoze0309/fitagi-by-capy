@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/ui';
 import { NumberField } from '../components/NumberField';
@@ -50,6 +50,11 @@ export function QuickLogPage() {
   const { t } = useI18n();
   const { settings } = useApp();
   const ai = useMemo(() => aiService(settings), [settings]);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   const [stage, setStage] = useState<Stage>('input');
   const [text, setText] = useState('');
@@ -96,6 +101,7 @@ export function QuickLogPage() {
       // reject it — otherwise answering the sheet would strand the user on it.
       const isResume = reviewedWorkout !== undefined;
       if (busy && !isResume) return;
+      const route = window.location.hash;
       setBusy(true);
       try {
         const appendToCurrent = target === 'current' && inProgress !== null;
@@ -134,6 +140,8 @@ export function QuickLogPage() {
         } catch (error) {
           console.warn('[summary] generation failed', error);
         }
+        // Summary generation may outlive this screen or a navigation already started.
+        if (!mounted.current || window.location.hash !== route) return;
         const exerciseCount = savedCounts?.exercises ?? finished.exercises.length;
         const setCount =
           savedCounts?.sets ?? finished.exercises.reduce((sum, e) => sum + e.sets.length, 0);
@@ -168,6 +176,7 @@ export function QuickLogPage() {
 
   const saveAsNoteOnly = useCallback(async () => {
     if (busy) return;
+    const route = window.location.hash;
     setBusy(true);
     try {
       const base = createWorkout();
@@ -184,6 +193,7 @@ export function QuickLogPage() {
       } catch (error) {
         console.warn('[summary] generation failed', error);
       }
+      if (!mounted.current || window.location.hash !== route) return;
       toast.show(t('quickLog.savedAsNote'), 'success');
       navigate(`/history/${workout.id}`, { replace: true });
     } finally {
@@ -527,6 +537,16 @@ function PreviewExerciseCard({
             </button>
           </div>
           <div className="set-flags">
+            <label className="row small">
+              {t('workout.rir')}
+              <NumberField
+                value={set.rir}
+                decimals={0}
+                ariaLabel={t('quickLog.setRirLabel', { index: index + 1 })}
+                placeholder="—"
+                onChange={(value) => updateSet(set.id, { rir: value === null ? null : Math.max(0, value) })}
+              />
+            </label>
             <button
               type="button"
               className="flag-toggle"

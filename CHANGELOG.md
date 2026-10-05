@@ -13,6 +13,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and the proj
 
 ### Added / 新增
 
+- **Cancellable chat.** Stop generation, abort on leaving the page, retry failed history loading,
+  and show context disclosures in the selected language. Partial answers stay out of memory.
+  **可取消的聊天。** 支持停止生成、离开页面取消、历史读取失败重试，上下文说明跟随界面语言；未完成回答不保存。
+- **RIR preview editing.** Quick Log preserves and lets you edit reps in reserve before saving.
+  **RIR 预览编辑。** 快速记录保留解析出的剩余次数，并允许在确认前修改。
+
 - **On-device AI chat memory.** The latest 100 exchanges persist locally; follow-up requests
   include up to 8 recent exchanges and disclose that context. The AI page now also includes
   the active workout in its training context.
@@ -20,6 +26,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/), and the proj
   AI 页面也会把进行中的训练加入训练上下文。
 
 ### Changed / 变更
+
+- **Request and storage reliability.** SSE supports LF/CRLF/CR, split UTF-8 and terminal DONE;
+  model calls have a total deadline. IndexedDB operations abort on timeout, blocked deletion waits
+  for completion, and stale reads cannot replace a newer cache.
+  **请求与存储可靠性。** 流式解析兼容多种换行、分片中文与结束标记，请求有总时限；本地事务超时会中止，删除受阻不会虚报成功，旧读取不会覆盖新缓存。
+- **Correct fitness context and credentials.** Imperial profiles retain stored kilograms;
+  future sessions do not enter AI context and weekly totals start on Monday. Restoring a different
+  AI endpoint clears its old key and disables AI until reconfigured.
+  **训练上下文与凭据修正。** 英制资料按已存的公斤值使用；AI 上下文排除未来训练，周统计从周一开始；恢复到不同 AI 端点会清除原密钥并关闭 AI，等待重新配置。
 
 - **Clearer coaching boundaries.** Coach replies match the user's language and separate logged facts
   from hypothetical progression targets. Exact targets must be grounded in a relevant training

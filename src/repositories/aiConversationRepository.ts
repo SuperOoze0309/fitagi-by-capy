@@ -25,6 +25,12 @@ export class AiConversationRepository {
    * replaced the first and an exchange disappeared.
    */
   private writeQueue: Promise<void> = Promise.resolve();
+  private generation = 0;
+
+  /** Capture before starting a request; clearing invalidates outstanding answers. */
+  get revision(): number {
+    return this.generation;
+  }
 
   async recent(): Promise<AiConversationEntry[]> {
     const stored = await this.store.get<unknown>(CONVERSATION_KEY);
@@ -43,14 +49,16 @@ export class AiConversationRepository {
    * open at the same time — silently erased exchanges it had never seen. Appending
    * cannot destroy rows it did not read.
    */
-  async append(entries: readonly AiConversationEntry[]): Promise<void> {
+  async append(entries: readonly AiConversationEntry[], revision = this.generation): Promise<void> {
     const incoming = entries
       .map(normalizeEntry)
       .filter((entry): entry is AiConversationEntry => entry !== null);
     if (incoming.length === 0) return;
 
     await this.withWriteLock(async () => {
+      if (revision !== this.generation) return;
       const existing = await this.recent();
+      if (revision !== this.generation) return;
       const incomingIds = new Set(incoming.map((entry) => entry.id));
       const merged = [...incoming, ...existing.filter((entry) => !incomingIds.has(entry.id))].slice(
         0,
@@ -72,6 +80,7 @@ export class AiConversationRepository {
   }
 
   async clear(): Promise<void> {
+    this.generation += 1;
     await this.withWriteLock(async () => {
       await this.store.remove(CONVERSATION_KEY);
     });

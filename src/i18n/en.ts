@@ -258,6 +258,7 @@ export const en = {
   },
 
   quickLog: {
+    setRirLabel: "Set {index} RIR",
     title: 'Quick log',
     aiOn: 'AI on · {target}',
     offlineParser: 'Offline parser · AI off',
@@ -311,6 +312,19 @@ export const en = {
   },
 
   ai: {
+    stop: "Stop generating",
+    stopped: "Generation stopped. This partial answer was not saved.",
+    retryHistory: "Retry loading",
+    contextCurrent: "Current workout",
+    contextRecent: "Last 7 days",
+    contextWeeklySaved: "Saved weekly summary",
+    contextWeekly: "This week so far",
+    contextMonthlySaved: "Saved monthly summary",
+    contextMonthly: "This month so far",
+    contextQuestion: "Your question",
+    contextExercise: "Last {count} sessions per exercise",
+    contextConversation: "Previous conversation ({count} exchanges)",
+    contextUnknown: "Earlier context",
     title: 'AI',
     offSubtitle: 'Optional · currently off',
     offTitle: 'AI is switched off',
@@ -420,6 +434,7 @@ export const en = {
   },
 
   data: {
+    restoreAiCredentials: "If the AI endpoint changes, its saved API key is cleared and AI is turned off. Reconfigure it in Settings before sending a request.",
     title: 'Backup & restore',
     subtitle: 'Your data stays yours',
     onDevice: 'On this device',

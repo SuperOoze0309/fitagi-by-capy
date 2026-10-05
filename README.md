@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.9.0-informational.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Android%206.0%2B-3ddc84.svg)](#supported-devices)
-[![Tests](https://img.shields.io/badge/tests-320%20passing-brightgreen.svg)](docs/DEVELOPING.md#verify)
+[![Tests](https://img.shields.io/badge/tests-358%20passing-brightgreen.svg)](docs/DEVELOPING.md#verify)
 
 A free, open-source, local-first workout and meal tracker for Android. The mascot is a ragdoll cat,
 drawn in code rather than shipped as an image.
@@ -216,6 +216,9 @@ Building from source, running the app in a browser, the npm scripts and the test
   yanked back to the bottom
 - Endpoints that ignore the streaming flag still work: the whole answer appears at once
   instead of failing
+- Use **Stop generating** to cancel an answer. Leaving the page also cancels the request;
+  unfinished answers are not added to chat memory. Requests have a two-minute deadline.
+- Enter sends, Shift+Enter inserts a line break, and confirming an IME composition does not send.
 - Discovered exercise names are offered with a per-session name
 - **Chat memory stays on-device**: the latest 100 exchanges remain visible after leaving and
   reopening the AI page. Follow-ups include up to 8 earlier exchanges so the model can keep
@@ -245,8 +248,8 @@ Building from source, running the app in a browser, the npm scripts and the test
   override), plus the profile when it has been filled in
 - Meal photos are deliberately not included — a backup stays a record of your data rather
   than a photo dump. A restored meal keeps its numbers and has no picture
-- The API key is **never** written to a backup, and restoring never overwrites the key on
-  the device
+- The API key is **never** written to a backup. Restoring the same AI endpoint keeps the key on
+  the device. A changed endpoint clears the key and disables AI until you reconfigure it in Settings.
 - Import validates the file first, shows what it contains and what will be replaced, and
   only then applies it. A backup written before meals, reminders and plans existed still
   imports: its workouts are restored untouched and the newer sections simply arrive empty
@@ -503,7 +506,7 @@ The two rules that matter most:
    by an older version still imports. The frozen identifiers listed above exist for that reason — do
    not rename them.
 
-Run `npm run verify` before opening a pull request: lint, typecheck, 320 unit tests and a production
+Run `npm run verify` before opening a pull request: lint, typecheck, 358 unit tests and a production
 build. [`docs/DEVELOPING.md`](docs/DEVELOPING.md) has the rest, including the browser suite that drives
 the real app in headless Chrome at two viewports.
 

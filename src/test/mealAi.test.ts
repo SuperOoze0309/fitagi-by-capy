@@ -146,13 +146,13 @@ describe('user context', () => {
     assert.equal(resolveAge(EMPTY_PROFILE, now), null);
   });
 
-  it('interprets stored numbers according to the chosen unit system', () => {
+  it('keeps stored kilograms regardless of the display unit system', () => {
     const metric = resolveMetrics({ ...EMPTY_PROFILE, unitSystem: 'metric', weightKg: 130 });
     assert.equal(metric.weightKg, 130);
 
-    // A user on imperial typed pounds, so the stored number is pounds.
+    // The form converts input pounds to kilograms before saving.
     const imperial = resolveMetrics({ ...EMPTY_PROFILE, unitSystem: 'imperial', weightKg: 130 });
-    assert.equal(Math.round(imperial.weightKg * 100) / 100, 58.97);
+    assert.equal(imperial.weightKg, 130);
     // Height stays in centimetres in both systems.
     assert.equal(resolveMetrics({ ...EMPTY_PROFILE, heightCm: 173 }).heightCm, 173);
   });

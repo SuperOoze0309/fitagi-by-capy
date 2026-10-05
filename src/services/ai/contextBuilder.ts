@@ -51,19 +51,22 @@ export interface TrainingContext {
   /** The assembled prompt block. */
   text: string;
   /** What was actually included, for the "what will be sent" disclosure. */
-  sections: string[];
+  sections: ContextSection[];
   /** Rough size, shown in the UI. */
   characters: number;
 }
 
 const DEFAULT_SESSIONS = 5;
 
+export type ContextSection = 'currentWorkout' | 'last7Days' | 'weeklySaved' | 'weeklyComputed'
+  | 'monthlySaved' | 'monthlyComputed' | 'question' | `exerciseSessions:${number}` | `conversation:${number}`;
+
 export class ContextBuilder {
   constructor(private readonly repos: Repositories) {}
 
   async build(request: ContextRequest = {}): Promise<TrainingContext> {
     const now = request.now ?? new Date();
-    const sections: string[] = [];
+    const sections: ContextSection[] = [];
     const parts: string[] = [];
 
     // 1. The workout currently being recorded.
@@ -71,17 +74,17 @@ export class ContextBuilder {
       const workout = await this.repos.training.get(request.workoutId);
       if (workout) {
         parts.push(`## Current workout (in progress)\n${describeWorkout(workout)}`);
-        sections.push('current workout');
+        sections.push('currentWorkout');
       }
     }
 
     // 2. Recent sessions of the exercises in question.
     const names = request.exerciseNames?.filter((name) => name.trim() !== '') ?? [];
     if (names.length > 0) {
-      const perExercise = request.sessionsPerExercise ?? DEFAULT_SESSIONS;
+      const perExercise = Math.max(1, Math.min(20, Math.floor(request.sessionsPerExercise ?? DEFAULT_SESSIONS)));
       const blocks: string[] = [];
       for (const name of names) {
-        const history = await this.repos.exercises.history(name);
+        const history = (await this.repos.exercises.history(name)).filter((entry) => entry.date <= now);
         if (history.length === 0) continue;
         const lines = history.slice(0, perExercise).map((entry) => {
           const when = formatDayLabel(entry.dateKey);
@@ -94,14 +97,14 @@ export class ContextBuilder {
       }
       if (blocks.length > 0) {
         parts.push(`## Recent sessions for the exercises asked about\n${blocks.join('\n\n')}`);
-        sections.push(`last ${request.sessionsPerExercise ?? DEFAULT_SESSIONS} sessions per exercise`);
+        sections.push(`exerciseSessions:${perExercise}`);
       }
     }
 
     // 3. The last 7 days of training. This is a rolling window, not "since Monday",
     // because a Monday-morning question should still see the weekend.
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const recent = await this.repos.training.completed();
+    const recent = (await this.repos.training.completed()).filter((workout) => new Date(workout.startTime) <= now);
     const lastWeek = recent.filter((workout) => new Date(workout.startTime) >= weekAgo);
     if (lastWeek.length > 0) {
       // Prefer the stored daily summaries: they are the compressed form, and reusing
@@ -110,13 +113,11 @@ export class ContextBuilder {
       for (const dayKeyValue of [
         ...new Set(lastWeek.map((workout) => localDateKey(workout.startTime))),
       ].sort()) {
+        const dayWorkouts = lastWeek.filter((workout) => localDateKey(workout.startTime) === dayKeyValue);
         const summary = await this.repos.summaries.get('daily', dayKeyValue);
-        if (summary) {
+        if (summaryMatches(summary, dayWorkouts)) {
           dayLines.push(`- ${summary.periodKey}: ${summary.title}${firstBullet(summary)}`);
         } else {
-          const dayWorkouts = lastWeek.filter(
-            (workout) => localDateKey(workout.startTime) === dayKeyValue,
-          );
           dayLines.push(
             `- ${dayKeyValue}: ${dayWorkouts
               .flatMap((workout) => workoutExerciseNames(workout))
@@ -125,39 +126,42 @@ export class ContextBuilder {
         }
       }
       parts.push(`## Last 7 days\n${dayLines.join('\n')}`);
-      sections.push('last 7 days');
+      sections.push('last7Days');
     }
 
     // 4. Weekly rollup. A stored summary is preferred — it is what the user has
     // already seen, and it costs nothing to reuse — with a live rollup as fallback
     // so context is never empty just because a summary has not been generated yet.
-    if (request.includeWeekly !== false && lastWeek.length > 0) {
-      const stored = await this.repos.summaries.get('weekly', weekKey(now));
+    const thisWeek = recent.filter((workout) => new Date(workout.startTime) >= startOfWeek(now));
+    if (request.includeWeekly !== false && thisWeek.length > 0) {
+      const candidate = await this.repos.summaries.get('weekly', weekKey(now));
+      const stored = summaryMatches(candidate, thisWeek) ? candidate : null;
       parts.push(
         stored
           ? `## This week so far (saved summary)\n${stored.body}`
-          : `## This week so far\n${describeWeek(lastWeek)}`,
+          : `## This week so far\n${describeWeek(thisWeek)}`,
       );
-      sections.push(stored ? 'saved weekly summary' : 'weekly rollup (computed)');
+      sections.push(stored ? 'weeklySaved' : 'weeklyComputed');
     }
 
     // 5. Monthly rollup, only when asked for.
     if (request.includeMonthly) {
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const month = recent.filter((workout) => new Date(workout.startTime) >= monthStart);
-      const stored = await this.repos.summaries.get('monthly', monthKey(now));
+      const candidate = await this.repos.summaries.get('monthly', monthKey(now));
+      const stored = summaryMatches(candidate, month) ? candidate : null;
       if (stored) {
         parts.push(`## This month so far (saved summary)\n${stored.body}`);
-        sections.push('saved monthly summary');
+        sections.push('monthlySaved');
       } else if (month.length > 0) {
         parts.push(`## This month so far\n${describeMonth(month)}`);
-        sections.push('monthly rollup (computed)');
+        sections.push('monthlyComputed');
       }
     }
 
     if (request.question) {
       parts.push(`## User question\n${request.question}`);
-      sections.push('your question');
+      sections.push('question');
     }
 
     const text = parts.join('\n\n');
@@ -177,6 +181,13 @@ export class ContextBuilder {
       .slice(0, limit)
       .map((suggestion) => suggestion.name);
   }
+}
+
+/** Only reuse a summary that describes exactly the sessions in the current window. */
+function summaryMatches(summary: TrainingSummary | null, workouts: Workout[]): summary is TrainingSummary {
+  if (!summary || workouts.length === 0) return false;
+  const ids = new Set(workouts.map((workout) => workout.id));
+  return summary.workoutIds.length === ids.size && summary.workoutIds.every((id) => ids.has(id));
 }
 
 function startOfWeek(date: Date): Date {
